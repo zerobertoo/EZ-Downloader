@@ -3,6 +3,7 @@ const path = require("path");
 const { spawn } = require("child_process");
 const { updateElectronApp } = require("update-electron-app");
 
+if (require("electron-squirrel-startup") === true) app.quit();
 updateElectronApp();
 
 function createWindow() {
