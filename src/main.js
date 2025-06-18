@@ -1,9 +1,7 @@
 const { app, BrowserWindow, ipcMain, dialog } = require("electron");
 const path = require("path");
 const { spawn } = require("child_process");
-const { updateElectronApp } = require("update-electron-app")({
-  repo: "zerobertoo/ez-downloader",
-});
+const { updateElectronApp } = require("update-electron-app");
 
 if (require("electron-squirrel-startup") === true) app.quit();
 updateElectronApp();
