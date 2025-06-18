@@ -10,7 +10,11 @@ module.exports = {
   makers: [
     {
       name: "@electron-forge/maker-squirrel",
-      config: {},
+      config: {
+        iconURL:
+          "https://raw.githubusercontent.com/zerobertoo/ez-downloader/main/src/assets/icon.ico",
+        setupIcon: "./src/assets/icon.ico",
+      },
     },
     {
       name: "@electron-forge/maker-zip",
@@ -18,11 +22,21 @@ module.exports = {
     },
     {
       name: "@electron-forge/maker-deb",
-      config: {},
+      config: {
+        icon: "./src/assets/icon.png",
+      },
+    },
+    {
+      name: "@electron-forge/maker-dmg",
+      config: {
+        icon: "./src/assets/icon.png",
+      },
     },
     {
       name: "@electron-forge/maker-rpm",
-      config: {},
+      config: {
+        icon: "./src/assets/icon.png",
+      },
     },
   ],
   publishers: [
