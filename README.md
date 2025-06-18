@@ -71,4 +71,3 @@ Contribuições são bem-vindas! Se você tiver sugestões de melhorias, relatar
 ## 📄 Licença
 
 Este projeto está licenciado sob a [Licença MIT](LICENSE). Consulte o arquivo `LICENSE` para mais detalhes.
-"# EZ-Downloader" 
