@@ -4,19 +4,29 @@
   "description": "Interface simples para yt-dlp — Baixe vídeos e áudios facilmente.",
   "main": "src/main.js",
   "scripts": {
-    "start": "electron ."
+    "start": "electron-forge start",
+    "package": "electron-forge package",
+    "make": "electron-forge make"
   },
   "keywords": [],
   "author": "zerobertoo",
   "license": "MIT",
   "type": "commonjs",
   "devDependencies": {
-    "electron": "^36.4.0",
-    "electron-builder": "^26.0.12"
+    "@electron-forge/cli": "^7.8.1",
+    "@electron-forge/maker-deb": "^7.8.1",
+    "@electron-forge/maker-rpm": "^7.8.1",
+    "@electron-forge/maker-squirrel": "^7.8.1",
+    "@electron-forge/maker-zip": "^7.8.1",
+    "@electron-forge/plugin-auto-unpack-natives": "^7.8.1",
+    "@electron-forge/plugin-fuses": "^7.8.1",
+    "@electron-forge/publisher-github": "^7.8.1",
+    "@electron/fuses": "^1.8.0",
+    "electron": "^36.4.0"
   },
   "build": {
     "appId": "com.zerobertoo.ezdownloader",
-    "productName": "EZ Downloader",
+    "productName": "EZ-Downloader",
     "win": {
       "icon": "src/assets/icon.ico"
     },
@@ -26,5 +36,9 @@
     "linux": {
       "icon": "src/assets/icon.png"
     }
+  },
+  "dependencies": {
+    "electron-squirrel-startup": "^1.0.1",
+    "update-electron-app": "^3.1.1"
   }
 }

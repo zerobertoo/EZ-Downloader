@@ -1,6 +1,9 @@
 const { app, BrowserWindow, ipcMain, dialog } = require("electron");
 const path = require("path");
 const { spawn } = require("child_process");
+const { updateElectronApp } = require("update-electron-app");
+
+updateElectronApp();
 
 function createWindow() {
   const win = new BrowserWindow({
