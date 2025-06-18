@@ -1,0 +1,32 @@
+{
+  "name": "ez_downloader",
+  "version": "1.0.1",
+  "description": "Interface simples para yt-dlp — Baixe vídeos e áudios facilmente.",
+  "main": "src/main.js",
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder",
+    "dist": "electron-builder --publish=always"
+  },
+  "keywords": [],
+  "author": "zerobertoo",
+  "license": "MIT",
+  "type": "commonjs",
+  "devDependencies": {
+    "electron": "^36.4.0",
+    "electron-builder": "^26.0.12"
+  },
+  "build": {
+    "appId": "com.zerobertoo.ezdownloader",
+    "productName": "EZ Downloader",
+    "win": {
+      "icon": "src/assets/icon.ico"
+    },
+    "mac": {
+      "icon": "src/assets/icon.icns"
+    },
+    "linux": {
+      "icon": "src/assets/icon.png"
+    }
+  }
+}

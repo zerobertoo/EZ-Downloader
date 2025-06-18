@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>EZ Downloader</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+  </head>
+  <body class="bg-neutral-900 text-white font-sans">
+    <!-- Titlebar -->
+    <div
+      class="flex justify-between items-center bg-neutral-800 px-4 py-2 select-none"
+    >
+      <div class="text-lg font-bold">EZ Downloader</div>
+      <div class="flex gap-2">
+        <button id="minimize" class="w-8 h-8 hover:bg-neutral-700 rounded">
+          —
+        </button>
+        <button id="close" class="w-8 h-8 hover:bg-red-600 rounded">×</button>
+      </div>
+    </div>
+
+    <!-- Container -->
+    <div
+      class="max-w-md mx-auto mt-8 bg-neutral-800 p-6 rounded-xl shadow-lg space-y-4"
+    >
+      <div>
+        <label class="block mb-1">🔗 Link do vídeo:</label>
+        <input
+          id="linkInput"
+          type="text"
+          placeholder="Cole o link aqui"
+          class="w-full p-2 rounded bg-neutral-700 text-white"
+        />
+      </div>
+
+      <div>
+        <label class="block mb-1">📁 Pasta de download:</label>
+        <div class="flex gap-2">
+          <input
+            id="folderInput"
+            type="text"
+            readonly
+            placeholder="Selecione uma pasta"
+            class="flex-grow p-2 rounded bg-neutral-700 text-white"
+          />
+          <button
+            id="selectFolderBtn"
+            class="bg-blue-600 hover:bg-blue-700 px-3 rounded"
+          >
+            Selecionar
+          </button>
+        </div>
+      </div>
+
+      <div class="flex flex-col gap-3">
+        <button
+          id="downloadVideoBtn"
+          class="bg-green-600 hover:bg-green-700 p-2 rounded"
+        >
+          🔽 Baixar Vídeo (MP4)
+        </button>
+        <button
+          id="downloadAudioBtn"
+          class="bg-amber-600 hover:bg-amber-700 p-2 rounded"
+        >
+          🎧 Baixar Áudio (MP3)
+        </button>
+      </div>
+
+      <div>
+        <label class="block mb-1">📜 Log:</label>
+        <textarea
+          id="logOutput"
+          readonly
+          class="w-full h-52 p-2 rounded bg-neutral-900 text-xs resize-none"
+        ></textarea>
+      </div>
+    </div>
+
+    <script src="renderer.js"></script>
+  </body>
+</html>
