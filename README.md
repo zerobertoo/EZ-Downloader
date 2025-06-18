@@ -2,6 +2,8 @@
 
 Uma interface simples e fácil de usar para o yt-dlp, focada em downloads rápidos e descomplicados de vídeos e áudios do YouTube. 🚀
 
+[![Build/Release](https://github.com/zerobertoo/EZ-Downloader/actions/workflows/build.yml/badge.svg)](https://github.com/zerobertoo/EZ-Downloader/actions/workflows/build.yml)
+
 ## ✨ Recursos
 
 - **🎯 Interface Simples e Intuitiva**: Projetado para ser fácil de usar, mesmo para usuários sem conhecimento técnico
