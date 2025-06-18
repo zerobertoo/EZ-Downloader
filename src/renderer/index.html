@@ -5,8 +5,17 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>EZ Downloader</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+      .titlebar {
+        -webkit-app-region: drag;
+      }
+      .titlebar button {
+        -webkit-app-region: no-drag;
+        cursor: pointer;
+      }
+    </style>
   </head>
-  <body class="bg-neutral-900 text-white font-sans">
+  <body class="bg-neutral-900 text-white font-sans titlebar">
     <!-- Titlebar -->
     <div
       class="flex justify-between items-center bg-neutral-800 px-4 py-2 select-none"
@@ -16,7 +25,7 @@
         <button id="minimize" class="w-8 h-8 hover:bg-neutral-700 rounded">
           —
         </button>
-        <button id="close" class="w-8 h-8 hover:bg-red-600 rounded">×</button>
+        <button id="close" class="w-8 h-8 hover:bg-red-600 rounded">X</button>
       </div>
     </div>
 
