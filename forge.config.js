@@ -4,6 +4,7 @@ const { FuseV1Options, FuseVersion } = require("@electron/fuses");
 module.exports = {
   packagerConfig: {
     asar: true,
+    icon: "./src/assets/icon",
   },
   rebuildConfig: {},
   makers: [
@@ -29,8 +30,8 @@ module.exports = {
       name: "@electron-forge/publisher-github",
       config: {
         repository: {
-          owner: "me",
-          name: "awesome-thing",
+          owner: "zerobertoo",
+          name: "ez-downloader",
         },
         prerelease: true,
       },
