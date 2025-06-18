@@ -1,6 +1,6 @@
 {
   "name": "ez-downloader",
-  "version": "1.1.1",
+  "version": "1.1.2",
   "description": "Interface simples para yt-dlp — Baixe vídeos e áudios facilmente.",
   "main": "src/main.js",
   "scripts": {
@@ -36,7 +36,14 @@
     },
     "linux": {
       "icon": "src/assets/icon.png"
-    }
+    },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "zerobertoo",
+        "repo": "ez-downloader"
+      }
+    ]
   },
   "dependencies": {
     "electron-squirrel-startup": "^1.0.1",
