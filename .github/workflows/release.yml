@@ -1,26 +1,35 @@
-name: Release app
+name: Build and Release
+
 on:
-  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
 jobs:
   build:
     strategy:
       matrix:
-        os:
-          [
-            { name: "linux", image: "ubuntu-latest" },
-            { name: "windows", image: "windows-latest" },
-            { name: "macos", image: "macos-latest" },
-          ]
-    runs-on: ${{ matrix.os.image }}
+        os: [macos-latest, windows-latest, ubuntu-latest]
+
+    name: Build on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+
     steps:
-      - name: Github checkout
-        uses: actions/checkout@v4
-      - name: Use Node.js
-        uses: actions/setup-node@v4
+      - name: Checkout repo
+        uses: actions/checkout@v3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
         with:
-          node-version: 20
-      - run: npm ci
-      - name: Publish app
+          node-version: "20"
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Make build
+        run: npm run make
+
+      - name: Publish release
         env:
           GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
         run: npm run publish
