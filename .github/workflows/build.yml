@@ -1,4 +1,4 @@
-name: Build/Release
+name: Build/release
 
 on: push
 
@@ -12,10 +12,10 @@ jobs:
 
     steps:
       - name: Check out Git repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v1
 
       - name: Install Node.js, NPM and Yarn
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v1
         with:
           node-version: 20
 

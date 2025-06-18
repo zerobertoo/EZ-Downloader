@@ -4,9 +4,7 @@
   "description": "Interface simples para yt-dlp — Baixe vídeos e áudios facilmente.",
   "main": "src/main.js",
   "scripts": {
-    "start": "electron .",
-    "build": "electron-builder",
-    "dist": "electron-builder --publish=always"
+    "start": "electron ."
   },
   "keywords": [],
   "author": "zerobertoo",
