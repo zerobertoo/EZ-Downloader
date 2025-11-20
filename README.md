@@ -4,15 +4,15 @@ Uma interface gráfica intuitiva e moderna para o **yt-dlp**, projetada para sim
 
 ## 🚀 Funcionalidades Principais
 
-| Funcionalidade               | Detalhes                                                                           | Status |
-| :--------------------------- | :--------------------------------------------------------------------------------- | :----- |
-| **Interface Intuitiva**      | Design limpo e focado na experiência do usuário.                                   | ✅     |
-| **Multiplataforma**          | Suporte completo para **Windows**, **macOS** e **Linux**.                          | ✅     |
-| **Atualizações Automáticas** | Verifica e instala novas versões automaticamente via GitHub Releases.              | ✅     |
-| **Progresso em Tempo Real**  | Exibição precisa do progresso de download do `yt-dlp`.                             | ✅     |
-| **Seleção de Formato**       | Permite escolher entre a melhor qualidade ou formatos específicos (vídeo e áudio). | ✅     |
-| **Seleção de Diretório**     | Escolha fácil do local de salvamento dos arquivos.                                 | ✅     |
-| **Modo Avançado**            | Configurações avançadas do `yt-dlp` (Roadmap).                                     | 🚧     |
+| Funcionalidade | Detalhes | Status |
+| :--- | :--- | :--- |
+| **Interface Intuitiva** | Design limpo e focado na experiência do usuário. | ✅ |
+| **Multiplataforma** | Suporte completo para **Windows**, **macOS** e **Linux**. | ✅ |
+| **Atualizações Automáticas** | Verifica e instala novas versões automaticamente via GitHub Releases. | ✅ |
+| **Progresso em Tempo Real** | Exibição precisa do progresso de download do `yt-dlp`. | ✅ |
+| **Seleção de Formato** | Permite escolher entre a melhor qualidade (requer FFmpeg) ou formatos específicos. | ✅ |
+| **Seleção de Diretório** | Escolha fácil do local de salvamento dos arquivos. | ✅ |
+| **Modo Avançado** | Configurações avançadas do `yt-dlp` (Roadmap). | 🚧 |
 
 ## 🛠️ Configuração para Desenvolvimento
 
@@ -22,19 +22,17 @@ Este projeto utiliza **Electron Forge** para empacotamento e build.
 
 - **Node.js** (versão 18+ recomendada)
 - **yt-dlp** instalado e acessível via PATH (necessário para o desenvolvimento e para o binário final, caso não seja empacotado separadamente).
-- **FFmpeg** (opcional, mas altamente recomendado para mesclagem de áudio/vídeo e conversão de formatos).
+- **FFmpeg** (obrigatório, essencial para mesclar vídeo e áudio no download de "Melhor Qualidade").
 
 ### Instalação
 
 1.  **Clone o repositório:**
-
     ```bash
     git clone https://github.com/seu-usuario/ez-downloader.git
     cd ez-downloader
     ```
 
 2.  **Instale as dependências:**
-
     ```bash
     npm install
     ```
@@ -64,11 +62,11 @@ npm run make
 
 O arquivo `.github/workflows/release.yml` configura o fluxo de trabalho para build e release automáticos.
 
-| Plataforma  | Maker (Forge)           | Tipo de Artefato   |
-| :---------- | :---------------------- | :----------------- |
-| **Windows** | `MakerSquirrel`         | `exe` (Instalador) |
-| **macOS**   | `MakerZIP`              | `zip` (App bundle) |
-| **Linux**   | `MakerDeb` / `MakerRpm` | `deb` / `rpm`      |
+| Plataforma | Maker (Forge) | Tipo de Artefato |
+| :--- | :--- | :--- |
+| **Windows** | `MakerSquirrel` | `exe` (Instalador) |
+| **macOS** | `MakerZIP` | `zip` (App bundle) |
+| **Linux** | `MakerDeb` / `MakerRpm` | `deb` / `rpm` |
 
 **Como Funciona:**
 

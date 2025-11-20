@@ -202,7 +202,8 @@ class DownloadManager {
       // Construir argumentos
       const args = [
         "-f",
-        format === "best" ? "best" : format,
+        format === "best" ? "bestvideo+bestaudio/best" : format,
+        ...(format === "best" ? ["--merge-output-format", "mp4"] : []),
         "-o",
         outputTemplate,
         "--progress",
