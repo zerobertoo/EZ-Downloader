@@ -23,7 +23,7 @@ autoUpdater.on("update-available", () => {
     .showMessageBox(mainWindow, {
       type: "info",
       title: "Atualização Disponível",
-      message: "Uma nova versão do yt-dlp GUI está disponível.",
+      message: "Uma nova versão do EZ Downloader está disponível.",
       buttons: ["Instalar Agora", "Mais Tarde"],
       defaultId: 0,
     })
@@ -134,10 +134,10 @@ function createMenu() {
           click: () => {
             dialog.showMessageBox(mainWindow, {
               type: "info",
-              title: "Sobre yt-dlp GUI",
-              message: "yt-dlp GUI v1.0.0",
+              title: "Sobre EZ Downloader",
+              message: "EZ Downloader v1.0.3",
               detail:
-                "Uma interface amigável para o yt-dlp\n\nGitHub: https://github.com/YOUR_USERNAME/yt-dlp-gui",
+                "Uma interface amigável para o yt-dlp\n\nGitHub: https://github.com/zerobertoo/EZ-Downloader",
             });
           },
         },
