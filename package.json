@@ -35,6 +35,7 @@
   "build": {
     "appId": "com.ezdownloader.app",
     "productName": "EZ Downloader",
+    "executableName": "ez-downloader",
     "directories": {
       "buildResources": "assets",
       "output": "dist"

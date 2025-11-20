@@ -5,14 +5,12 @@ require("dotenv").config();
 module.exports = {
   packagerConfig: {
     name: "EZ Downloader",
-    executableName: "EZ Downloader",
+    executableName: "ez-downloader",
     asar: true,
     osxSign: {},
     appCategoryType: "public.app-category.utilities",
   },
-  rebuildConfig: {
-    force: true,
-  },
+  rebuildConfig: {},
   makers: [
     {
       name: "@electron-forge/maker-squirrel",
