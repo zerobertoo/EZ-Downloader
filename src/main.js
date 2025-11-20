@@ -10,6 +10,7 @@ const { autoUpdater } = require("electron-updater");
 const path = require("path");
 const isDev = process.env.NODE_ENV === "development";
 const { DownloadManager } = require("./downloadManager");
+const { updateElectronApp } = require("update-electron-app");
 
 let mainWindow;
 let downloadManager;
@@ -203,3 +204,5 @@ ipcMain.on("download-progress", (event, data) => {
     mainWindow.webContents.send("download-progress", data);
   }
 });
+
+updateElectronApp();
