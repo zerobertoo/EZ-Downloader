@@ -1,183 +1,102 @@
 # EZ Downloader
 
-Uma interface gráfica intuitiva e moderna para o [yt-dlp](https://github.com/yt-dlp/yt-dlp), permitindo download de vídeos e áudio de YouTube, TikTok, Instagram, Facebook, Twitch e muitas outras plataformas.
+Uma interface gráfica intuitiva e moderna para o **yt-dlp**, projetada para simplificar o download de vídeos e áudio de diversas plataformas como YouTube, TikTok, Instagram, Facebook, Twitch e muitas outras.
 
-## Características
+## 🚀 Funcionalidades Principais
 
-- **Interface Simplificada**: Design intuitivo e fácil de usar
-- **Múltiplos Formatos**: Suporte para vídeo (MP4, WebM, etc.) e áudio (MP3, WAV, etc.)
-- **Melhor Qualidade**: Download automático na melhor qualidade disponível
-- **Multiplataforma**: Windows, macOS e Linux
-- **Atualizações Automáticas**: Sistema de atualização integrado via GitHub (Corrigido e Otimizado)
-- **Seleção de Diretório**: Escolha onde salvar seus downloads
-- **Modo Avançado**: (Futuro) Configurações avançadas do yt-dlp
+| Funcionalidade               | Detalhes                                                                           | Status |
+| :--------------------------- | :--------------------------------------------------------------------------------- | :----- |
+| **Interface Intuitiva**      | Design limpo e focado na experiência do usuário.                                   | ✅     |
+| **Multiplataforma**          | Suporte completo para **Windows**, **macOS** e **Linux**.                          | ✅     |
+| **Atualizações Automáticas** | Verifica e instala novas versões automaticamente via GitHub Releases.              | ✅     |
+| **Progresso em Tempo Real**  | Exibição precisa do progresso de download do `yt-dlp`.                             | ✅     |
+| **Seleção de Formato**       | Permite escolher entre a melhor qualidade ou formatos específicos (vídeo e áudio). | ✅     |
+| **Seleção de Diretório**     | Escolha fácil do local de salvamento dos arquivos.                                 | ✅     |
+| **Modo Avançado**            | Configurações avançadas do `yt-dlp` (Roadmap).                                     | 🚧     |
 
-## Requisitos
+## 🛠️ Configuração para Desenvolvimento
 
-- **Node.js** 18+ e npm
-- **yt-dlp** instalado e acessível via linha de comando (Necessário para desenvolvimento, mas empacotado no build final)
-- **FFmpeg** (opcional, para conversão de formatos)
+Este projeto utiliza **Electron Forge** para empacotamento e build.
 
-### Instalação de Dependências
+### Pré-requisitos
 
-#### Windows
+- **Node.js** (versão 18+ recomendada)
+- **yt-dlp** instalado e acessível via PATH (necessário para o desenvolvimento e para o binário final, caso não seja empacotado separadamente).
+- **FFmpeg** (opcional, mas altamente recomendado para mesclagem de áudio/vídeo e conversão de formatos).
 
-```bash
-# Instalar yt-dlp
-pip install yt-dlp
+### Instalação
 
-# Instalar FFmpeg (opcional)
-choco install ffmpeg
-```
+1.  **Clone o repositório:**
 
-#### macOS
+    ```bash
+    git clone https://github.com/seu-usuario/ez-downloader.git
+    cd ez-downloader
+    ```
 
-```bash
-# Instalar yt-dlp
-brew install yt-dlp
+2.  **Instale as dependências:**
 
-# Instalar FFmpeg (opcional)
-brew install ffmpeg
-```
+    ```bash
+    npm install
+    ```
 
-#### Linux (Ubuntu/Debian)
+3.  **Inicie em modo desenvolvimento:**
+    ```bash
+    npm start
+    ```
 
-```bash
-# Instalar yt-dlp
-sudo apt-get install yt-dlp
+## 📦 Build e Distribuição (CI/CD)
 
-# Instalar FFmpeg (opcional)
-sudo apt-get install ffmpeg
-```
+O projeto está configurado para usar **Electron Forge** e **GitHub Actions** para automatizar o processo de build e publicação de releases.
 
-## Instalação
+### Builds Locais
 
-### Desenvolvimento
-
-1. Clone o repositório:
+Para gerar instaláveis para sua plataforma:
 
 ```bash
-git clone https://github.com/zerobertoo/ez-downloader.git
-cd yt-dlp-gui
+# Empacota o aplicativo
+npm run package
+
+# Cria o instalável (depende do seu OS)
+npm run make
 ```
 
-2. Instale as dependências:
+### Pipeline de CI/CD com GitHub Actions
 
-```bash
-npm install
-```
+O arquivo `.github/workflows/release.yml` configura o fluxo de trabalho para build e release automáticos.
 
-3. Inicie a aplicação em modo desenvolvimento:
+| Plataforma  | Maker (Forge)           | Tipo de Artefato   |
+| :---------- | :---------------------- | :----------------- |
+| **Windows** | `MakerSquirrel`         | `exe` (Instalador) |
+| **macOS**   | `MakerZIP`              | `zip` (App bundle) |
+| **Linux**   | `MakerDeb` / `MakerRpm` | `deb` / `rpm`      |
 
-```bash
-npm start
-```
+**Como Funciona:**
 
-### Build
+1.  **Gatilho:** O workflow é acionado sempre que uma nova **tag** no formato `v*.*.*` é enviada ao repositório (ex: `git tag v1.1.0` e `git push --tags`).
+2.  **Publicação:** O **Electron Forge** utiliza o `PublisherGithub` para fazer o upload dos artefatos de build para a seção **Releases** do seu repositório.
 
-Para criar instaláveis para sua plataforma:
+**Ação Necessária (Secrets):**
 
-```bash
-# Build para Windows
-npm run build:win
+Para que o pipeline de publicação funcione, você **DEVE** configurar um Secret chamado `GITHUB_TOKEN` no seu repositório GitHub. Este token deve ter a permissão `repo` para criar e gerenciar releases.
 
-# Build para macOS
-npm run build:mac
+## 🐛 Correção de Progresso em Tempo Real (v1.1.0)
 
-# Build para Linux
-npm run build:linux
+A lógica de comunicação entre o processo principal e o processo de renderização foi ajustada para garantir que as atualizações de progresso do `yt-dlp` sejam enviadas corretamente para a interface.
 
-# Build para todas as plataformas
-npm run build:all
-```
+- **`src/main.js`:** O `downloadManager.onProgress` agora envia o progresso para a janela principal.
+- **`src/downloadManager.js`:** A emissão de progresso foi otimizada para evitar spam de eventos e garantir que o valor de **100%** seja enviado imediatamente ao ser detectado.
 
-Os instaláveis estarão no diretório `dist/`.
-
-## Estrutura do Projeto
-
-```
-ez-downloader/
-├── src/
-│   ├── main.js              # Arquivo principal do Electron
-│   ├── preload.js           # Script de preload para segurança
-│   └── downloadManager.js   # Gerenciador de downloads
-├── public/
-│   ├── index.html           # HTML principal
-│   ├── styles.css           # Estilos CSS
-│   └── renderer.js          # Lógica da interface
-├── assets/
-│   └── icons/               # Ícones da aplicação
-├── .github/
-│   └── workflows/           # GitHub Actions workflows
-├── package.json             # Configuração do Node.js
-└── README.md                # Este arquivo
-```
-
-## Configuração do GitHub Workflows
-
-O projeto está configurado para builds automáticos e releases via GitHub Actions. Para ativar:
-
-1. Vá para as configurações do repositório
-2. Ative GitHub Actions
-3. Crie um token de acesso pessoal (PAT) com permissão `repo`
-4. Adicione como secret `GITHUB_TOKEN`
-
-## Uso
-
-### Modo Simplificado (MVP)
-
-1. Cole a URL do vídeo no campo de entrada
-2. Clique em "Buscar Formatos"
-3. Selecione o formato desejado
-4. Escolha o diretório de download
-5. Clique em "Iniciar Download"
-
-### Formatos Suportados
-
-- **Vídeo**: MP4, WebM, MKV, AVI, MOV
-- **Áudio**: MP3, WAV, M4A, OPUS, VORBIS
-
-## Atualizações Automáticas
-
-A aplicação verifica automaticamente por atualizações ao iniciar. Se uma atualização estiver disponível, você será notificado e poderá instalar imediatamente.
-
-## Contribuindo
-
-Contribuições são bem-vindas! Por favor:
-
-1. Faça um fork do projeto
-2. Crie uma branch para sua feature (`git checkout -b feature/AmazingFeature`)
-3. Commit suas mudanças (`git commit -m 'Add some AmazingFeature'`)
-4. Push para a branch (`git push origin feature/AmazingFeature`)
-5. Abra um Pull Request
-
-## Roadmap
-
-- [x] **Correção do Progresso de Download em Tempo Real**
-- [ ] Histórico de downloads
-- [ ] Fila de downloads
-- [ ] Suporte a temas (claro/escuro)
-- [ ] Integração com gerenciador de downloads do SO
-- [ ] Suporte a plugins
-
-## Licença
+## 📜 Licença
 
 Este projeto está licenciado sob a Licença MIT - veja o arquivo [LICENSE](LICENSE) para detalhes.
 
-## Créditos
+## 🤝 Contribuições
 
-- [yt-dlp](https://github.com/yt-dlp/yt-dlp) - O excelente projeto de download de vídeos
-- [Electron](https://www.electronjs.org/) - Framework para aplicações desktop
+Contribuições são bem-vindas! Sinta-se à vontade para abrir Issues ou Pull Requests.
 
-## Suporte
+## 🔗 Créditos
 
-Se encontrar problemas ou tiver sugestões, por favor abra uma [issue](https://github.com/zerobertoo/ez-downloader/issues).
-
-## Changelog
-
-### v1.1.0 (Otimização e Correção)
-
-- Interface simplificada de download
-- Seleção de formatos
-- Suporte multiplataforma
-- Atualizações automáticas via GitHub
+- [yt-dlp](https://github.com/yt-dlp/yt-dlp)
+- [Electron](https://www.electronjs.org/)
+- [Electron Forge](https://www.electronforge.io/)
+- [update-electron-app](https://github.com/electron/update-electron-app)
