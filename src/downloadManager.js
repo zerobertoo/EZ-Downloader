@@ -6,7 +6,7 @@ const fs = require("fs");
 class DownloadManager {
   constructor() {
     this.currentProcess = null;
-    this.downloadPath = path.join(os.homedir(), "Downloads", "yt-dlp-gui");
+    this.downloadPath = path.join(os.homedir(), "Downloads");
     this.progressCallback = null;
 
     // Criar diretório de downloads se não existir
