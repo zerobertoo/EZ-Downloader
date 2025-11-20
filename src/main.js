@@ -47,6 +47,11 @@ app.on("ready", () => {
   });
 
   downloadManager = new DownloadManager();
+  downloadManager.onProgress((progress) => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send("download-progress", progress);
+    }
+  });
   createWindow();
   createMenu();
 });
@@ -220,9 +225,4 @@ ipcMain.handle("cancel-download", () => {
   }
 });
 
-// Progresso de download
-ipcMain.on("download-progress", (_, data) => {
-  if (mainWindow && !mainWindow.isDestroyed()) {
-    mainWindow.webContents.send("download-progress", data);
-  }
-});
+

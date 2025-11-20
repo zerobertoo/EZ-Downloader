@@ -8,14 +8,14 @@ Uma interface gráfica intuitiva e moderna para o [yt-dlp](https://github.com/yt
 - **Múltiplos Formatos**: Suporte para vídeo (MP4, WebM, etc.) e áudio (MP3, WAV, etc.)
 - **Melhor Qualidade**: Download automático na melhor qualidade disponível
 - **Multiplataforma**: Windows, macOS e Linux
-- **Atualizações Automáticas**: Sistema de atualização integrado via GitHub
+- **Atualizações Automáticas**: Sistema de atualização integrado via GitHub (Corrigido e Otimizado)
 - **Seleção de Diretório**: Escolha onde salvar seus downloads
 - **Modo Avançado**: (Futuro) Configurações avançadas do yt-dlp
 
 ## Requisitos
 
-- **Node.js** 14+ e npm
-- **yt-dlp** instalado e acessível via linha de comando
+- **Node.js** 18+ e npm
+- **yt-dlp** instalado e acessível via linha de comando (Necessário para desenvolvimento, mas empacotado no build final)
 - **FFmpeg** (opcional, para conversão de formatos)
 
 ### Instalação de Dependências
@@ -153,7 +153,7 @@ Contribuições são bem-vindas! Por favor:
 
 ## Roadmap
 
-- [ ] Modo Avançado com configurações completas do yt-dlp
+- [x] **Correção do Progresso de Download em Tempo Real**
 - [ ] Histórico de downloads
 - [ ] Fila de downloads
 - [ ] Suporte a temas (claro/escuro)
@@ -175,7 +175,7 @@ Se encontrar problemas ou tiver sugestões, por favor abra uma [issue](https://g
 
 ## Changelog
 
-### v1.0.0 (MVP)
+### v1.1.0 (Otimização e Correção)
 
 - Interface simplificada de download
 - Seleção de formatos

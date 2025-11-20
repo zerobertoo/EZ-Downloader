@@ -229,16 +229,13 @@ class DownloadManager {
           const now = Date.now();
 
           // Enviar progresso apenas a cada 500ms para evitar spam
-          if (now - lastProgress > 500) {
+          if (now - lastProgress > 500 || progress === 100) {
             this.emitProgress(progress);
             lastProgress = now;
           }
         }
 
-        // Detectar quando o download terminou
-        if (str.includes("[download] 100%")) {
-          this.emitProgress(100);
-        }
+
       });
 
       this.currentProcess.stderr.on("data", (data) => {
