@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>EZ Downloader - Download de Vídeos</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="container">
+      <header class="header">
+        <div class="header-content">
+          <h1 class="title">EZ Downloader</h1>
+          <p class="subtitle">Download de vídeos e áudio de forma simples</p>
+        </div>
+        <div class="version-info">
+          <span id="version">v1.0.0</span>
+        </div>
+      </header>
+
+      <main class="main-content">
+        <!-- Seção de Input -->
+        <section class="input-section">
+          <div class="form-group">
+            <label for="urlInput" class="label">URL do Vídeo</label>
+            <div class="input-wrapper">
+              <input
+                type="text"
+                id="urlInput"
+                class="input-field"
+                placeholder="Cole a URL do vídeo aqui (YouTube, TikTok, Instagram, etc.)"
+                autocomplete="off"
+              />
+              <button id="fetchFormatsBtn" class="btn btn-primary">
+                Buscar Formatos
+              </button>
+            </div>
+            <p class="help-text">
+              Suporta: YouTube, TikTok, Instagram, Facebook, Twitch e muitos
+              outros
+            </p>
+          </div>
+        </section>
+
+        <!-- Seção de Carregamento -->
+        <section id="loadingSection" class="loading-section hidden">
+          <div class="spinner"></div>
+          <p>Buscando formatos disponíveis...</p>
+        </section>
+
+        <!-- Seção de Seleção de Formato -->
+        <section id="formatsSection" class="formats-section hidden">
+          <div class="form-group">
+            <label for="formatSelect" class="label">Selecione o Formato</label>
+            <select id="formatSelect" class="select-field">
+              <option value="">Carregando formatos...</option>
+            </select>
+            <p class="help-text" id="formatInfo"></p>
+          </div>
+
+          <!-- Informações do Vídeo -->
+          <div id="videoInfo" class="video-info hidden">
+            <div class="info-item">
+              <span class="info-label">Título:</span>
+              <span id="videoTitle" class="info-value"></span>
+            </div>
+            <div class="info-item">
+              <span class="info-label">Duração:</span>
+              <span id="videoDuration" class="info-value"></span>
+            </div>
+            <div class="info-item">
+              <span class="info-label">Tamanho Estimado:</span>
+              <span id="videoSize" class="info-value"></span>
+            </div>
+          </div>
+
+          <!-- Seleção de Diretório -->
+          <div class="form-group">
+            <label for="downloadPath" class="label">Local de Download</label>
+            <div class="input-wrapper">
+              <input
+                type="text"
+                id="downloadPath"
+                class="input-field"
+                placeholder="Clique para selecionar o diretório"
+                readonly
+              />
+              <button id="selectPathBtn" class="btn btn-secondary">
+                Procurar
+              </button>
+            </div>
+          </div>
+
+          <!-- Botão de Download -->
+          <button id="downloadBtn" class="btn btn-success btn-large">
+            <span class="btn-icon">⬇️</span>
+            Iniciar Download
+          </button>
+        </section>
+
+        <!-- Seção de Progresso -->
+        <section id="progressSection" class="progress-section hidden">
+          <div class="progress-container">
+            <div class="progress-info">
+              <span id="progressText">Preparando download...</span>
+              <span id="progressPercent">0%</span>
+            </div>
+            <div class="progress-bar">
+              <div id="progressFill" class="progress-fill"></div>
+            </div>
+            <button id="cancelBtn" class="btn btn-danger">Cancelar</button>
+          </div>
+        </section>
+
+        <!-- Seção de Sucesso -->
+        <section id="successSection" class="success-section hidden">
+          <div class="success-message">
+            <span class="success-icon">✓</span>
+            <h2>Download Concluído!</h2>
+            <p id="successText">O arquivo foi baixado com sucesso.</p>
+            <button id="openFolderBtn" class="btn btn-primary">
+              Abrir Pasta
+            </button>
+            <button id="newDownloadBtn" class="btn btn-secondary">
+              Novo Download
+            </button>
+          </div>
+        </section>
+
+        <!-- Seção de Erro -->
+        <section id="errorSection" class="error-section hidden">
+          <div class="error-message">
+            <span class="error-icon">✕</span>
+            <h2>Erro no Download</h2>
+            <p id="errorText"></p>
+            <button id="retryBtn" class="btn btn-primary">
+              Tentar Novamente
+            </button>
+            <button id="resetBtn" class="btn btn-secondary">Voltar</button>
+          </div>
+        </section>
+      </main>
+
+      <footer class="footer">
+        <p>EZ Downloader - Interface amigável para download de vídeos</p>
+        <p class="footer-links">
+          <a href="https://github.com/YOUR_USERNAME/yt-dlp-gui" target="_blank"
+            >GitHub</a
+          >
+          •
+          <a href="https://github.com/yt-dlp/yt-dlp" target="_blank">yt-dlp</a>
+        </p>
+      </footer>
+    </div>
+
+    <script src="renderer.js"></script>
+  </body>
+</html>
