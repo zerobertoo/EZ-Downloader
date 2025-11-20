@@ -1,5 +1,6 @@
 const { FusesPlugin } = require("@electron-forge/plugin-fuses");
 const { FuseV1Options, FuseVersion } = require("@electron/fuses");
+require("dotenv").config();
 
 module.exports = {
   packagerConfig: {
@@ -32,7 +33,10 @@ module.exports = {
           owner: "zerobertoo",
           name: "EZ-Downloader",
         },
-        prerelease: true,
+        prerelease: false,
+        authToken: process.env.GITHUB_TOKEN,
+        generateReleaseNotes: true,
+        draft: false,
       },
     },
   ],
