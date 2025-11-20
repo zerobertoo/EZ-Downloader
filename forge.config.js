@@ -4,9 +4,14 @@ require("dotenv").config();
 
 module.exports = {
   packagerConfig: {
+    name: "EZ Downloader",
     asar: true,
+    osxSign: {},
+    appCategoryType: "public.app-category.utilities",
   },
-  rebuildConfig: {},
+  rebuildConfig: {
+    force: true,
+  },
   makers: [
     {
       name: "@electron-forge/maker-squirrel",
@@ -36,7 +41,7 @@ module.exports = {
         prerelease: false,
         authToken: process.env.GITHUB_TOKEN,
         generateReleaseNotes: true,
-        draft: false,
+        draft: true,
       },
     },
   ],
