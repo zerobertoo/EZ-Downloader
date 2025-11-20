@@ -9,7 +9,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   getDownloadsPath: () => ipcRenderer.invoke("getDownloadsPath"),
   openPath: (path) => ipcRenderer.invoke("open-path", path),
   onDownloadProgress: (callback) =>
-    ipcRenderer.on("download-progress", (event, data) => callback(data)),
+    ipcRenderer.on("download-progress", (_, data) => callback(data)),
   removeDownloadProgressListener: () =>
     ipcRenderer.removeAllListeners("download-progress"),
 });

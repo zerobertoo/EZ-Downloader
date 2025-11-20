@@ -6,6 +6,7 @@ module.exports = {
   packagerConfig: {
     name: "EZ Downloader",
     executableName: "ez-downloader",
+    appBundleId: "com.ezdownloader.app",
     asar: true,
     osxSign: {},
     appCategoryType: "public.app-category.utilities",

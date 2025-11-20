@@ -5,6 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>EZ Downloader - Download de Vídeos</title>
     <link rel="stylesheet" href="styles.css" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline';"
+    />
   </head>
   <body>
     <div class="container">
@@ -19,7 +23,6 @@
       </header>
 
       <main class="main-content">
-        <!-- Seção de Input -->
         <section class="input-section">
           <div class="form-group">
             <label for="urlInput" class="label">URL do Vídeo</label>
@@ -42,23 +45,24 @@
           </div>
         </section>
 
-        <!-- Seção de Carregamento -->
         <section id="loadingSection" class="loading-section hidden">
-          <div class="spinner"></div>
+          <div class="spinner" aria-hidden="true"></div>
           <p>Buscando formatos disponíveis...</p>
         </section>
 
-        <!-- Seção de Seleção de Formato -->
         <section id="formatsSection" class="formats-section hidden">
           <div class="form-group">
             <label for="formatSelect" class="label">Selecione o Formato</label>
-            <select id="formatSelect" class="select-field">
+            <select
+              id="formatSelect"
+              class="select-field"
+              aria-label="Selecione o formato do vídeo"
+            >
               <option value="">Carregando formatos...</option>
             </select>
             <p class="help-text" id="formatInfo"></p>
           </div>
 
-          <!-- Informações do Vídeo -->
           <div id="videoInfo" class="video-info hidden">
             <div class="info-item">
               <span class="info-label">Título:</span>
@@ -74,7 +78,6 @@
             </div>
           </div>
 
-          <!-- Seleção de Diretório -->
           <div class="form-group">
             <label for="downloadPath" class="label">Local de Download</label>
             <div class="input-wrapper">
@@ -91,15 +94,17 @@
             </div>
           </div>
 
-          <!-- Botão de Download -->
           <button id="downloadBtn" class="btn btn-success btn-large">
             <span class="btn-icon">⬇️</span>
             Iniciar Download
           </button>
         </section>
 
-        <!-- Seção de Progresso -->
-        <section id="progressSection" class="progress-section hidden">
+        <section
+          id="progressSection"
+          class="progress-section hidden"
+          aria-live="polite"
+        >
           <div class="progress-container">
             <div class="progress-info">
               <span id="progressText">Preparando download...</span>
@@ -112,7 +117,6 @@
           </div>
         </section>
 
-        <!-- Seção de Sucesso -->
         <section id="successSection" class="success-section hidden">
           <div class="success-message">
             <span class="success-icon">✓</span>
@@ -127,7 +131,6 @@
           </div>
         </section>
 
-        <!-- Seção de Erro -->
         <section id="errorSection" class="error-section hidden">
           <div class="error-message">
             <span class="error-icon">✕</span>
@@ -144,11 +147,19 @@
       <footer class="footer">
         <p>EZ Downloader - Interface amigável para download de vídeos</p>
         <p class="footer-links">
-          <a href="https://github.com/zerobertoo/EZ-Downloader" target="_blank"
+          <a
+            href="https://github.com/zerobertoo/EZ-Downloader"
+            target="_blank"
+            rel="noopener noreferrer"
             >GitHub</a
           >
           •
-          <a href="https://github.com/yt-dlp/yt-dlp" target="_blank">yt-dlp</a>
+          <a
+            href="https://github.com/yt-dlp/yt-dlp"
+            target="_blank"
+            rel="noopener noreferrer"
+            >yt-dlp</a
+          >
         </p>
       </footer>
     </div>

@@ -41,7 +41,6 @@ const elements = {
 
 // Inicializar a aplicação
 document.addEventListener("DOMContentLoaded", async () => {
-  // Carregar versão
   const version = await window.electronAPI.getVersion();
   elements.version.textContent = `v${version}`;
 
@@ -56,70 +55,47 @@ document.addEventListener("DOMContentLoaded", async () => {
   elements.newDownloadBtn.addEventListener("click", handleReset);
   elements.openFolderBtn.addEventListener("click", handleOpenFolder);
 
-  // Permitir Enter para buscar formatos
   elements.urlInput.addEventListener("keypress", (e) => {
-    if (e.key === "Enter") {
-      handleFetchFormats();
-    }
+    if (e.key === "Enter") handleFetchFormats();
   });
 
-  // Definir caminho padrão de Downloads do sistema
   const downloadsPath = await window.electronAPI.getDownloadsPath();
   if (downloadsPath) {
     state.downloadPath = downloadsPath;
     updateDownloadPathDisplay();
   }
 
-  // Mostrar a seção inicial
   showSection("input");
 });
 
-/**
- * Buscar formatos disponíveis
- */
+// Buscar formatos
 async function handleFetchFormats() {
   const url = elements.urlInput.value.trim();
-
-  if (!url) {
+  if (!url || !isValidUrl(url)) {
     showError("Por favor, insira uma URL válida");
     return;
   }
 
-  if (!isValidUrl(url)) {
-    showError(
-      "URL inválida. Por favor, insira uma URL completa (ex: https://youtube.com/...)"
-    );
-    return;
-  }
-
   state.currentUrl = url;
-
-  // Mostrar loading
   showSection("loading");
 
   try {
     const result = await window.electronAPI.getFormats(url);
-
-    if (!result.success) {
-      throw new Error(result.error);
-    }
+    if (!result.success) throw new Error(result.error);
 
     state.formats = result.formats;
     populateFormatSelect();
     showSection("formats");
   } catch (error) {
-    console.error("Erro ao buscar formatos:", error);
+    console.error(error);
     showError(`Erro ao buscar formatos: ${error.message}`);
     showSection("input");
   }
 }
 
-/**
- * Popular o select de formatos
- */
+// Popular select de formatos
 function populateFormatSelect() {
   elements.formatSelect.innerHTML = "";
-
   state.formats.forEach((format) => {
     const option = document.createElement("option");
     option.value = format.id;
@@ -127,54 +103,38 @@ function populateFormatSelect() {
     option.dataset.format = JSON.stringify(format);
     elements.formatSelect.appendChild(option);
   });
-
-  // Selecionar o primeiro formato por padrão
   if (state.formats.length > 0) {
     elements.formatSelect.value = state.formats[0].id;
     handleFormatChange();
   }
 }
 
-/**
- * Lidar com mudança de formato
- */
 function handleFormatChange() {
   const selectedOption = elements.formatSelect.selectedOptions[0];
-  if (selectedOption && selectedOption.dataset.format) {
+  if (selectedOption?.dataset.format) {
     state.selectedFormat = JSON.parse(selectedOption.dataset.format);
     updateFormatInfo();
   }
 }
 
-/**
- * Atualizar informações do formato
- */
 function updateFormatInfo() {
   if (!state.selectedFormat) return;
 
   const format = state.selectedFormat;
   let info = "";
-
-  if (format.type === "best") {
+  if (format.type === "best")
     info = "Melhor qualidade disponível (vídeo + áudio)";
-  } else if (format.type === "video") {
+  else if (format.type === "video") {
     info = `Vídeo ${format.height}p • ${format.fps} fps`;
-    if (format.filesize) {
-      info += ` • ${formatFileSize(format.filesize)}`;
-    }
+    if (format.filesize) info += ` • ${formatFileSize(format.filesize)}`;
   } else if (format.type === "audio") {
     info = `Áudio ${format.ext.toUpperCase()}`;
-    if (format.filesize) {
-      info += ` • ${formatFileSize(format.filesize)}`;
-    }
+    if (format.filesize) info += ` • ${formatFileSize(format.filesize)}`;
   }
-
   elements.formatInfo.textContent = info;
 }
 
-/**
- * Selecionar caminho de download
- */
+// Selecionar caminho de download
 async function handleSelectPath() {
   const path = await window.electronAPI.selectDownloadPath();
   if (path) {
@@ -183,26 +143,14 @@ async function handleSelectPath() {
   }
 }
 
-/**
- * Atualizar exibição do caminho de download
- */
 function updateDownloadPathDisplay() {
-  if (state.downloadPath) {
-    elements.downloadPath.value = state.downloadPath;
-  }
+  elements.downloadPath.value = state.downloadPath || "";
 }
 
-/**
- * Iniciar download
- */
+// Iniciar download
 async function handleDownload() {
-  if (!state.selectedFormat) {
-    showError("Por favor, selecione um formato");
-    return;
-  }
-
-  if (!state.downloadPath) {
-    showError("Por favor, selecione um diretório de download");
+  if (!state.selectedFormat || !state.downloadPath) {
+    showError("Selecione formato e diretório de download");
     return;
   }
 
@@ -217,87 +165,48 @@ async function handleDownload() {
       state.selectedFormat.id,
       state.downloadPath
     );
+    if (!result.success) throw new Error(result.error);
 
-    if (!result.success) {
-      throw new Error(result.error);
-    }
-
-    // Simular progresso
-    let progress = 0;
-    const interval = setInterval(() => {
-      progress += Math.random() * 30;
-      if (progress > 90) progress = 90;
-      updateProgress(progress);
-
-      if (progress >= 90) {
-        clearInterval(interval);
-      }
-    }, 500);
-
-    // Aguardar um pouco e depois mostrar sucesso
-    setTimeout(() => {
-      clearInterval(interval);
-      updateProgress(100);
-      showSuccess(result.result);
-    }, 3000);
+    // Atualizar progresso para 100% direto (substituir simulação)
+    updateProgress(100);
+    showSuccess(result.result);
   } catch (error) {
-    console.error("Erro no download:", error);
+    console.error(error);
     showError(`Erro no download: ${error.message}`);
     showSection("error");
   }
 }
 
-/**
- * Atualizar progresso do download
- */
 function updateProgress(percent) {
-  const clampedPercent = Math.min(Math.max(percent, 0), 100);
-  elements.progressFill.style.width = `${clampedPercent}%`;
-  elements.progressPercent.textContent = `${Math.round(clampedPercent)}%`;
-
-  if (clampedPercent < 30) {
-    elements.progressText.textContent = "Baixando vídeo...";
-  } else if (clampedPercent < 70) {
-    elements.progressText.textContent = "Processando arquivo...";
-  } else if (clampedPercent < 100) {
-    elements.progressText.textContent = "Finalizando...";
-  } else {
-    elements.progressText.textContent = "Download concluído!";
-  }
+  const clamped = Math.min(Math.max(percent, 0), 100);
+  elements.progressFill.style.width = `${clamped}%`;
+  elements.progressPercent.textContent = `${Math.round(clamped)}%`;
+  if (clamped < 100) elements.progressText.textContent = "Baixando...";
+  else elements.progressText.textContent = "Download concluído!";
 }
 
-/**
- * Cancelar download
- */
+// Cancelar download
 function handleCancel() {
   showSection("formats");
 }
 
-/**
- * Mostrar sucesso
- */
+// Mostrar sucesso
 function showSuccess(result) {
   elements.successText.textContent = `Arquivo salvo em: ${result.path}`;
   showSection("success");
 }
 
-/**
- * Mostrar erro
- */
+// Mostrar erro
 function showError(message) {
   elements.errorText.textContent = message;
 }
 
-/**
- * Lidar com retry
- */
+// Retry
 function handleRetry() {
   showSection("formats");
 }
 
-/**
- * Lidar com reset
- */
+// Reset
 async function handleReset() {
   state.currentUrl = "";
   state.selectedFormat = null;
@@ -305,7 +214,6 @@ async function handleReset() {
   elements.urlInput.value = "";
   elements.formatSelect.innerHTML = "";
 
-  // Recarregar caminho padrão de Downloads
   const downloadsPath = await window.electronAPI.getDownloadsPath();
   if (downloadsPath) {
     state.downloadPath = downloadsPath;
@@ -315,28 +223,21 @@ async function handleReset() {
   showSection("input");
 }
 
-/**
- * Abrir pasta de download
- */
+// Abrir pasta
 async function handleOpenFolder() {
   if (state.downloadPath) {
     window.electronAPI.openPath(state.downloadPath).catch((err) => {
-      console.error("Erro ao abrir pasta:", err);
+      console.error(err);
       showError("Erro ao abrir pasta de downloads");
     });
   }
 }
 
-/**
- * Mostrar seção específica
- */
+// Mostrar seção
 function showSection(section) {
-  // Esconder todas as seções
-  document.querySelectorAll("section").forEach((s) => {
-    s.classList.add("hidden");
-  });
-
-  // Mostrar seção específica
+  document
+    .querySelectorAll("section")
+    .forEach((s) => s.classList.add("hidden"));
   switch (section) {
     case "input":
       elements.inputSection.classList.remove("hidden");
@@ -359,9 +260,7 @@ function showSection(section) {
   }
 }
 
-/**
- * Validar URL
- */
+// Validação de URL
 function isValidUrl(string) {
   try {
     new URL(string);
@@ -371,28 +270,11 @@ function isValidUrl(string) {
   }
 }
 
-/**
- * Formatar tamanho de arquivo
- */
+// Formatar tamanho de arquivo
 function formatFileSize(bytes) {
-  if (bytes === 0) return "0 Bytes";
+  if (!bytes) return "0 Bytes";
   const k = 1024;
   const sizes = ["Bytes", "KB", "MB", "GB"];
   const i = Math.floor(Math.log(bytes) / Math.log(k));
   return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + " " + sizes[i];
-}
-
-/**
- * Formatar duração em segundos para HH:MM:SS
- */
-function formatDuration(seconds) {
-  if (!seconds) return "Desconhecida";
-  const hours = Math.floor(seconds / 3600);
-  const minutes = Math.floor((seconds % 3600) / 60);
-  const secs = Math.floor(seconds % 60);
-
-  if (hours > 0) {
-    return `${hours}h ${minutes}m ${secs}s`;
-  }
-  return `${minutes}m ${secs}s`;
 }
