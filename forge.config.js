@@ -5,6 +5,7 @@ require("dotenv").config();
 module.exports = {
   packagerConfig: {
     name: "EZ Downloader",
+    executableName: "EZ Downloader",
     asar: true,
     osxSign: {},
     appCategoryType: "public.app-category.utilities",
