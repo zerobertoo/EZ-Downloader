@@ -34,7 +34,7 @@ function createWindow() {
 
   mainWindow.loadFile(path.join(__dirname, "../public/index.html"));
 
-  if (config.debug) {
+  if (config.debug === true) {
     mainWindow.webContents.openDevTools();
   }
 
