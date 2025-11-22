@@ -1,100 +1,51 @@
 # EZ Downloader
 
-Uma interface gráfica intuitiva e moderna para o **yt-dlp**, projetada para simplificar o download de vídeos e áudio de diversas plataformas como YouTube, TikTok, Instagram, Facebook, Twitch e muitas outras.
+Uma interface gráfica intuitiva e moderna para o **yt-dlp**, perfeita para baixar vídeos e áudio de **YouTube, Instagram, Facebook, Twitch** e muitas outras plataformas.
 
-## 🚀 Funcionalidades Principais
+## ✨ Funcionalidades
 
-| Funcionalidade | Detalhes | Status |
-| :--- | :--- | :--- |
-| **Interface Intuitiva** | Design limpo e focado na experiência do usuário. | ✅ |
-| **Multiplataforma** | Suporte completo para **Windows**, **macOS** e **Linux**. | ✅ |
-| **Atualizações Automáticas** | Verifica e instala novas versões automaticamente via GitHub Releases. | ✅ |
-| **Progresso em Tempo Real** | Exibição precisa do progresso de download do `yt-dlp`. | ✅ |
-| **Seleção de Formato** | Permite escolher entre a melhor qualidade (requer FFmpeg) ou formatos específicos. | ✅ |
-| **Seleção de Diretório** | Escolha fácil do local de salvamento dos arquivos. | ✅ |
-| **Modo Avançado** | Configurações avançadas do `yt-dlp` (Roadmap). | 🚧 |
+- 🎥 Download de vídeos em qualidades variadas
+- 🎵 Extração de áudio
+- 🖼️ Visualização de thumbnail e informações do vídeo
+- 📊 Barra de progresso em tempo real
+- 🔄 Atualizações automáticas
+- 🌐 Suporte multiplataforma (Windows, macOS, Linux)
+- ⚡ Configuração automática (sem instalação manual necessária)
 
-## 🛠️ Configuração para Desenvolvimento
+## 📥 Como Usar
 
-Este projeto utiliza **Electron Forge** para empacotamento e build.
+### Para Usuários Finais
 
-### Pré-requisitos
+1. **Baixe a última versão** na seção [Releases](https://github.com/zerobertoo/ez-downloader/releases)
+2. **Instale** (Windows: `.exe` | macOS: `.zip` | Linux: `.deb` ou `.rpm`)
+3. **Abra a aplicação** e comece a baixar!
 
-- **Node.js** (versão 18+ recomendada)
-- **yt-dlp** instalado e acessível via PATH (necessário para o desenvolvimento e para o binário final, caso não seja empacotado separadamente).
-- **FFmpeg** (obrigatório, essencial para mesclar vídeo e áudio no download de "Melhor Qualidade").
+### Para Desenvolvedores
 
-### Instalação
+1. **Clone o repositório:**
 
-1.  **Clone o repositório:**
-    ```bash
-    git clone https://github.com/seu-usuario/ez-downloader.git
-    cd ez-downloader
-    ```
+   ```bash
+   git clone https://github.com/zerobertoo/ez-downloader.git
+   cd ez-downloader
+   ```
 
-2.  **Instale as dependências:**
-    ```bash
-    npm install
-    ```
+2. **Instale as dependências:**
 
-3.  **Inicie em modo desenvolvimento:**
-    ```bash
-    npm start
-    ```
+   ```bash
+   npm install
+   ```
 
-## 📦 Build e Distribuição (CI/CD)
-
-O projeto está configurado para usar **Electron Forge** e **GitHub Actions** para automatizar o processo de build e publicação de releases.
-
-### Builds Locais
-
-Para gerar instaláveis para sua plataforma:
-
-```bash
-# Empacota o aplicativo
-npm run package
-
-# Cria o instalável (depende do seu OS)
-npm run make
-```
-
-### Pipeline de CI/CD com GitHub Actions
-
-O arquivo `.github/workflows/release.yml` configura o fluxo de trabalho para build e release automáticos.
-
-| Plataforma | Maker (Forge) | Tipo de Artefato |
-| :--- | :--- | :--- |
-| **Windows** | `MakerSquirrel` | `exe` (Instalador) |
-| **macOS** | `MakerZIP` | `zip` (App bundle) |
-| **Linux** | `MakerDeb` / `MakerRpm` | `deb` / `rpm` |
-
-**Como Funciona:**
-
-1.  **Gatilho:** O workflow é acionado sempre que uma nova **tag** no formato `v*.*.*` é enviada ao repositório (ex: `git tag v1.1.0` e `git push --tags`).
-2.  **Publicação:** O **Electron Forge** utiliza o `PublisherGithub` para fazer o upload dos artefatos de build para a seção **Releases** do seu repositório.
-
-**Ação Necessária (Secrets):**
-
-Para que o pipeline de publicação funcione, você **DEVE** configurar um Secret chamado `GITHUB_TOKEN` no seu repositório GitHub. Este token deve ter a permissão `repo` para criar e gerenciar releases.
-
-## 🐛 Correção de Progresso em Tempo Real (v1.1.0)
-
-A lógica de comunicação entre o processo principal e o processo de renderização foi ajustada para garantir que as atualizações de progresso do `yt-dlp` sejam enviadas corretamente para a interface.
-
-- **`src/main.js`:** O `downloadManager.onProgress` agora envia o progresso para a janela principal.
-- **`src/downloadManager.js`:** A emissão de progresso foi otimizada para evitar spam de eventos e garantir que o valor de **100%** seja enviado imediatamente ao ser detectado.
+3. **Inicie em modo desenvolvimento:**
+   ```bash
+   npm start
+   ```
 
 ## 📜 Licença
 
-Este projeto está licenciado sob a Licença MIT - veja o arquivo [LICENSE](LICENSE) para detalhes.
-
-## 🤝 Contribuições
-
-Contribuições são bem-vindas! Sinta-se à vontade para abrir Issues ou Pull Requests.
+Licenciado sob a Licença MIT - veja [LICENSE](LICENSE) para detalhes.
 
 ## 🔗 Créditos
 
 - [yt-dlp](https://github.com/yt-dlp/yt-dlp)
 - [Electron](https://www.electronjs.org/)
-- [Electron Forge](https://www.electronforge.io/)
-- [update-electron-app](https://github.com/electron/update-electron-app)
+- [ytdlp-nodejs](https://github.com/iqbal-rashed/ytdlp-nodejs)
