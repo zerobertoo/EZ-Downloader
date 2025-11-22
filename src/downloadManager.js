@@ -3,28 +3,11 @@ const path = require("path");
 const os = require("os");
 const fs = require("fs");
 
-// Tentar importar ffmpeg-static se disponível
-let ffmpegPath = null;
-try {
-  ffmpegPath = require("ffmpeg-static");
-} catch (e) {
-  console.warn(
-    "[DownloadManager] ffmpeg-static não está instalado. Usando FFmpeg do sistema."
-  );
-}
-
 class DownloadManager {
   constructor() {
-    // Configurar YtDlp com paths customizados
-    const ytdlpConfig = {};
+    this.ytdlp = new YtDlp();
 
-    if (ffmpegPath) {
-      ytdlpConfig.ffmpegPath = ffmpegPath;
-    }
-
-    this.ytdlp = new YtDlp(ytdlpConfig);
-
-    this.downloadPath = path.join(os.homedir(), "Downloads");
+    this.downloadPath = path.join(os.homedir(), "Downloads").toString();
     this.progressCallback = null;
     this.isInitialized = false;
     this.initPromise = null;
@@ -65,6 +48,7 @@ class DownloadManager {
           });
 
           await this.ytdlp.downloadFFmpeg();
+
           console.log("[DownloadManager] FFmpeg pronto");
         } catch (ffmpegError) {
           console.warn(
@@ -92,6 +76,15 @@ class DownloadManager {
     })();
 
     return this.initPromise;
+  }
+
+  /**   * Verifica a instalação do FFmpeg
+   * @returns {Promise<boolean>} True se instalado corretamente
+   */
+  async checkFFmpegInstallation() {
+    return await this.ytdlp.checkInstallationAsync({
+      ffmpeg: true,
+    });
   }
 
   /**

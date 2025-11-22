@@ -38,8 +38,8 @@ const config = {
     repo: "zerobertoo/EZ-Downloader",
     updateInterval: "1 hour",
   },
-  isDev: process.env.NODE_ENV || "development",
-  debug: process.env.DEBUG || "true",
+  isDev: process.env.NODE_ENV || "production",
+  debug: process.env.DEBUG || "false",
 };
 
 module.exports = config;
