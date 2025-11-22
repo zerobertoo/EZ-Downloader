@@ -6,6 +6,13 @@ const state = {
   downloadPath: null,
   formats: [],
   isDownloading: false,
+  isInitialized: false,
+  videoMetadata: {
+    title: "",
+    thumbnail: null,
+    duration: null,
+    uploader: null,
+  },
 };
 
 // Elementos do DOM
@@ -34,11 +41,19 @@ const elements = {
   errorText: document.getElementById("errorText"),
   successText: document.getElementById("successText"),
   version: document.getElementById("version"),
+  initSection: document.getElementById("initSection") || null,
+  initMessage: document.getElementById("initMessage") || null,
+  videoThumbnail: document.getElementById("videoThumbnail") || null,
+  videoTitle: document.getElementById("videoTitle") || null,
+  videoUploader: document.getElementById("videoUploader") || null,
 };
 
 // Inicializar a aplicação
 document.addEventListener("DOMContentLoaded", async () => {
   try {
+    // Mostrar seção de inicialização se existir
+    showSection("init");
+
     // Carregar versão
     const version = await window.electronAPI.getVersion();
     if (elements.version) {
@@ -61,24 +76,69 @@ document.addEventListener("DOMContentLoaded", async () => {
       if (e.key === "Enter") handleFetchFormats();
     });
 
-    // Obter caminho padrão de downloads
-    const downloadsPath = await window.electronAPI.getDownloadsPath();
-    if (downloadsPath) {
-      state.downloadPath = downloadsPath;
-      updateDownloadPathDisplay();
-    }
-
     // Listener para progresso de download
     window.electronAPI.onDownloadProgress((progress) => {
-      updateProgress(progress);
+      handleProgressUpdate(progress);
     });
 
-    showSection("input");
+    // Listener para quando a inicialização estiver completa
+    window.electronAPI.onInitComplete((data) => {
+      handleInitComplete(data);
+    });
+
+    // Aguardar um pouco e depois verificar se está inicializado
+    // (em caso de rápida inicialização sem necessidade de download de FFmpeg)
+    setTimeout(async () => {
+      const isInit = await window.electronAPI.checkInit();
+      if (isInit) {
+        handleInitComplete({ success: true, message: "Aplicação pronta" });
+      }
+    }, 1000);
   } catch (error) {
     console.error("Erro ao inicializar:", error);
     showError("Erro ao inicializar a aplicação");
+    showSection("error");
   }
 });
+
+/**
+ * Lidar com conclusão da inicialização
+ */
+function handleInitComplete(data) {
+  if (data.success) {
+    console.log("[Init] Inicialização concluída:", data.message);
+    state.isInitialized = true;
+
+    // Obter caminho padrão de downloads
+    window.electronAPI.getDownloadsPath().then((downloadsPath) => {
+      if (downloadsPath) {
+        state.downloadPath = downloadsPath;
+        updateDownloadPathDisplay();
+      }
+      showSection("input");
+    });
+  } else {
+    console.error("[Init] Erro na inicialização:", data.error);
+    showError(`Erro ao inicializar: ${data.error}`);
+    showSection("error");
+  }
+}
+
+/**
+ * Lidar com atualizações de progresso
+ */
+function handleProgressUpdate(progress) {
+  // Se for um evento de inicialização
+  if (progress.type === "init") {
+    if (elements.initMessage) {
+      elements.initMessage.textContent = progress.message || "Inicializando...";
+    }
+    return;
+  }
+
+  // Se for progresso de download
+  updateProgress(progress);
+}
 
 /**
  * Buscar formatos disponíveis
@@ -92,7 +152,9 @@ async function handleFetchFormats() {
   }
 
   if (!isValidUrl(url)) {
-    showError("URL inválida. Insira uma URL completa (ex: https://youtube.com/...)");
+    showError(
+      "URL inválida. Insira uma URL completa (ex: https://youtube.com/...)"
+    );
     return;
   }
 
@@ -111,12 +173,65 @@ async function handleFetchFormats() {
     }
 
     state.formats = result.formats;
+
+    // Armazenar metadados do vídeo
+    state.videoMetadata = {
+      title: result.title,
+      thumbnail: result.thumbnail,
+      duration: result.duration,
+      uploader: result.uploader,
+    };
+
     populateFormatSelect();
+    displayVideoMetadata();
     showSection("formats");
   } catch (error) {
     console.error("Erro ao buscar formatos:", error);
     showError(`Erro ao buscar formatos: ${error.message}`);
     showSection("input");
+  }
+}
+
+/**
+ * Exibir metadados do vídeo (thumbnail, título, uploader)
+ */
+function displayVideoMetadata() {
+  const metadata = state.videoMetadata || {};
+
+  // Exibir thumbnail
+  if (elements.videoThumbnail) {
+    if (metadata.thumbnail) {
+      elements.videoThumbnail.src = metadata.thumbnail;
+      elements.videoThumbnail.style.display = "block";
+      elements.videoThumbnail.onerror = () => {
+        // Se a thumbnail falhar, mostrar placeholder
+        showThumbnailPlaceholder();
+      };
+    } else {
+      showThumbnailPlaceholder();
+    }
+  }
+
+  // Exibir título
+  if (elements.videoTitle) {
+    elements.videoTitle.textContent = metadata.title || "Vídeo";
+  }
+
+  // Exibir uploader se disponível
+  if (elements.videoUploader && metadata.uploader) {
+    elements.videoUploader.textContent = `Por: ${metadata.uploader}`;
+  }
+}
+
+/**
+ * Mostrar placeholder para thumbnail
+ */
+function showThumbnailPlaceholder() {
+  if (elements.videoThumbnail) {
+    // Criar um placeholder SVG genérico
+    const svg = `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 320 180'%3E%3Crect fill='%23333' width='320' height='180'/%3E%3Cpath fill='%23666' d='M145 85l45 27v-54z'/%3E%3C/svg%3E`;
+    elements.videoThumbnail.src = svg;
+    elements.videoThumbnail.style.display = "block";
   }
 }
 
@@ -323,7 +438,8 @@ function showError(message) {
  * Retry
  */
 function handleRetry() {
-  showSection("formats");
+  elements.urlInput.value = "";
+  showSection("input");
 }
 
 /**
@@ -335,6 +451,12 @@ async function handleReset() {
     state.selectedFormat = null;
     state.formats = [];
     state.isDownloading = false;
+    state.videoMetadata = {
+      title: "",
+      thumbnail: null,
+      duration: null,
+      uploader: null,
+    };
 
     if (elements.urlInput) {
       elements.urlInput.value = "";
@@ -342,6 +464,18 @@ async function handleReset() {
 
     if (elements.formatSelect) {
       elements.formatSelect.innerHTML = "";
+    }
+
+    // Limpar elementos de vídeo
+    if (elements.videoThumbnail) {
+      elements.videoThumbnail.src = "";
+      elements.videoThumbnail.style.display = "none";
+    }
+    if (elements.videoTitle) {
+      elements.videoTitle.textContent = "";
+    }
+    if (elements.videoUploader) {
+      elements.videoUploader.textContent = "";
     }
 
     const downloadsPath = await window.electronAPI.getDownloadsPath();
@@ -386,6 +520,9 @@ function showSection(section) {
   });
 
   switch (section) {
+    case "init":
+      elements.initSection?.classList.remove("hidden");
+      break;
     case "input":
       elements.inputSection?.classList.remove("hidden");
       break;

@@ -17,9 +17,11 @@ let downloadManager;
 function createWindow() {
   mainWindow = new BrowserWindow({
     width: 900,
-    height: 700,
-    minWidth: 800,
+    height: 800,
+    minWidth: 600,
     minHeight: 600,
+    maxWidth: 900,
+    maxHeight: 800,
     icon: path.join(__dirname, "../assets/icons/icon.png"),
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
@@ -39,21 +41,49 @@ function createWindow() {
   mainWindow.on("closed", () => (mainWindow = null));
 }
 
-app.on("ready", () => {
+app.on("ready", async () => {
   // Configurar auto-update
   updateElectronApp({
     repo: config.update.repo,
     updateInterval: config.update.updateInterval,
   });
 
+  // Criar o download manager
   downloadManager = new DownloadManager();
+
+  // Registrar callback de progresso
   downloadManager.onProgress((progress) => {
     if (mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.webContents.send("download-progress", progress);
     }
   });
+
+  // Iniciar a janela
   createWindow();
   createMenu();
+
+  // Inicializar dependências na primeira execução (em background)
+  // Isso evita que a aplicação trave durante a primeira inicialização
+  downloadManager
+    .initialize()
+    .then(() => {
+      console.log("[Main] DownloadManager inicializado com sucesso");
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send("init-complete", {
+          success: true,
+          message: "Aplicação pronta",
+        });
+      }
+    })
+    .catch((error) => {
+      console.error("[Main] Erro ao inicializar DownloadManager:", error);
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send("init-complete", {
+          success: false,
+          error: error.message,
+        });
+      }
+    });
 });
 
 app.on("window-all-closed", () => {
@@ -124,6 +154,7 @@ function createMenu() {
 }
 
 // IPC Handlers
+
 ipcMain.handle("get-version", () => {
   return config.version;
 });
@@ -138,6 +169,11 @@ ipcMain.handle("get-app-info", () => {
   };
 });
 
+// Verificar se o download manager está pronto
+ipcMain.handle("check-init", () => {
+  return downloadManager.isReady();
+});
+
 ipcMain.handle("get-formats", async (_, url) => {
   try {
     // Validação básica de URL
@@ -148,8 +184,15 @@ ipcMain.handle("get-formats", async (_, url) => {
       };
     }
 
-    const formats = await downloadManager.getAvailableFormats(url);
-    return { success: true, formats };
+    const result = await downloadManager.getAvailableFormats(url);
+    return {
+      success: true,
+      formats: result.formats,
+      title: result.title,
+      thumbnail: result.thumbnail,
+      duration: result.duration,
+      uploader: result.uploader,
+    };
   } catch (error) {
     console.error("Erro ao buscar formatos:", error);
     return {
@@ -217,12 +260,11 @@ ipcMain.handle("getDownloadsPath", () => {
 
 ipcMain.handle("cancel-download", () => {
   try {
-    downloadManager.cancelDownload();
+    // O ytdlp-nodejs gerencia internamente o processo
+    // Você pode adicionar lógica aqui se necessário
     return { success: true };
   } catch (error) {
     console.error("Erro ao cancelar download:", error);
     return { success: false, error: error.message };
   }
 });
-
-
