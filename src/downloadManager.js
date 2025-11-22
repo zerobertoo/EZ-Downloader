@@ -78,15 +78,6 @@ class DownloadManager {
     return this.initPromise;
   }
 
-  /**   * Verifica a instalação do FFmpeg
-   * @returns {Promise<boolean>} True se instalado corretamente
-   */
-  async checkFFmpegInstallation() {
-    return await this.ytdlp.checkInstallationAsync({
-      ffmpeg: true,
-    });
-  }
-
   /**
    * Obtém os formatos disponíveis para um vídeo
    * @param {string} url - URL do vídeo
