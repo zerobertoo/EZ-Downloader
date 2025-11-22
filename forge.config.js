@@ -11,7 +11,9 @@ module.exports = {
     osxSign: {},
     appCategoryType: "public.app-category.utilities",
   },
-  rebuildConfig: {},
+  rebuildConfig: {
+    force: true,
+  },
   makers: [
     {
       name: "@electron-forge/maker-squirrel",

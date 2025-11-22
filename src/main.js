@@ -7,21 +7,23 @@ const {
   shell,
 } = require("electron");
 const path = require("path");
+const { DependencyManager } = require("./depManager");
 const { DownloadManager } = require("./downloadManager");
 const { updateElectronApp } = require("update-electron-app");
 const config = require("./config");
 
 let mainWindow;
+let depManager;
 let downloadManager;
+let ytdlpPath;
+let ffmpegPath;
 
 function createWindow() {
   mainWindow = new BrowserWindow({
     width: 900,
-    height: 800,
-    minWidth: 600,
+    height: 700,
+    minWidth: 800,
     minHeight: 600,
-    maxWidth: 900,
-    maxHeight: 800,
     icon: path.join(__dirname, "../assets/icons/icon.png"),
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
@@ -34,7 +36,7 @@ function createWindow() {
 
   mainWindow.loadFile(path.join(__dirname, "../public/index.html"));
 
-  if (config.debug === true) {
+  if (config.debug) {
     mainWindow.webContents.openDevTools();
   }
 
@@ -48,26 +50,44 @@ app.on("ready", async () => {
     updateInterval: config.update.updateInterval,
   });
 
-  // Criar o download manager
-  downloadManager = new DownloadManager();
-
-  // Registrar callback de progresso
-  downloadManager.onProgress((progress) => {
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send("download-progress", progress);
-    }
-  });
+  // Criar gerenciador de dependências
+  depManager = new DependencyManager();
 
   // Iniciar a janela
   createWindow();
   createMenu();
 
-  // Inicializar dependências na primeira execução (em background)
-  // Isso evita que a aplicação trave durante a primeira inicialização
-  downloadManager
-    .initialize()
+  // Inicializar dependências na primeira execução
+  depManager
+    .initialize((progress) => {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send("download-progress", {
+          type: "init",
+          ...progress,
+        });
+      }
+    })
     .then(() => {
-      console.log("[Main] DownloadManager inicializado com sucesso");
+      console.log("[Main] Dependências inicializadas com sucesso");
+
+      // Obter caminhos das dependências
+      ytdlpPath = depManager.getYtDlpPath();
+      ffmpegPath = depManager.getFFmpegPath();
+
+      console.log(`[Main] yt-dlp: ${ytdlpPath}`);
+      console.log(`[Main] FFmpeg: ${ffmpegPath}`);
+
+      // Criar Download Manager com os caminhos
+      downloadManager = new DownloadManager(ytdlpPath, ffmpegPath);
+
+      // Registrar callback de progresso
+      downloadManager.onProgress((progress) => {
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send("download-progress", progress);
+        }
+      });
+
+      // Notificar que está pronto
       if (mainWindow && !mainWindow.isDestroyed()) {
         mainWindow.webContents.send("init-complete", {
           success: true,
@@ -76,7 +96,7 @@ app.on("ready", async () => {
       }
     })
     .catch((error) => {
-      console.error("[Main] Erro ao inicializar DownloadManager:", error);
+      console.error("[Main] Erro ao inicializar dependências:", error);
       if (mainWindow && !mainWindow.isDestroyed()) {
         mainWindow.webContents.send("init-complete", {
           success: false,
@@ -169,14 +189,12 @@ ipcMain.handle("get-app-info", () => {
   };
 });
 
-// Verificar se o download manager está pronto
 ipcMain.handle("check-init", () => {
-  return downloadManager.isReady();
+  return downloadManager !== undefined;
 });
 
 ipcMain.handle("get-formats", async (_, url) => {
   try {
-    // Validação básica de URL
     if (!url || typeof url !== "string") {
       return {
         success: false,
@@ -204,7 +222,6 @@ ipcMain.handle("get-formats", async (_, url) => {
 
 ipcMain.handle("start-download", async (_, { url, format, outputPath }) => {
   try {
-    // Validações
     if (!url || !format || !outputPath) {
       return {
         success: false,
@@ -260,8 +277,7 @@ ipcMain.handle("getDownloadsPath", () => {
 
 ipcMain.handle("cancel-download", () => {
   try {
-    // O ytdlp-nodejs gerencia internamente o processo
-    // Você pode adicionar lógica aqui se necessário
+    downloadManager.cancelDownload();
     return { success: true };
   } catch (error) {
     console.error("Erro ao cancelar download:", error);

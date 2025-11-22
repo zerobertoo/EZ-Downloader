@@ -1,81 +1,19 @@
-const { YtDlp } = require("ytdlp-nodejs");
+const { spawn } = require("child_process");
 const path = require("path");
 const os = require("os");
 const fs = require("fs");
 
 class DownloadManager {
-  constructor() {
-    this.ytdlp = new YtDlp();
-
-    this.downloadPath = path.join(os.homedir(), "Downloads").toString();
+  constructor(ytdlpPath, ffmpegPath) {
+    this.ytdlpPath = ytdlpPath;
+    this.ffmpegPath = ffmpegPath;
+    this.downloadPath = path.join(os.homedir(), "Downloads");
     this.progressCallback = null;
-    this.isInitialized = false;
-    this.initPromise = null;
+    this.currentProcess = null;
 
     if (!fs.existsSync(this.downloadPath)) {
       fs.mkdirSync(this.downloadPath, { recursive: true });
     }
-  }
-
-  /**
-   * Inicializa o gerenciador e verifica/baixa dependências
-   * @returns {Promise<boolean>} True se inicializado com sucesso
-   */
-  async initialize() {
-    // Se já está inicializando, aguarde a promise
-    if (this.initPromise) {
-      return this.initPromise;
-    }
-
-    // Se já inicializado, retorne imediatamente
-    if (this.isInitialized) {
-      return true;
-    }
-
-    // Criar promise para gerenciar inicialização
-    this.initPromise = (async () => {
-      try {
-        console.log(
-          "[DownloadManager] Verificando instalação de dependências..."
-        );
-
-        try {
-          // Tentar fazer download do FFmpeg se não estiver presente
-          console.log("[DownloadManager] Baixando/verificando FFmpeg...");
-          this.emitInitProgress({
-            status: "downloading_ffmpeg",
-            message: "Preparando dependências (primeira inicialização)...",
-          });
-
-          await this.ytdlp.downloadFFmpeg();
-
-          console.log("[DownloadManager] FFmpeg pronto");
-        } catch (ffmpegError) {
-          console.warn(
-            "[DownloadManager] Aviso ao processar FFmpeg:",
-            ffmpegError.message
-          );
-          // Continuar mesmo se houver erro com FFmpeg
-          // O yt-dlp pode funcionar sem FFmpeg em alguns casos
-        }
-
-        console.log("[DownloadManager] yt-dlp e dependências estão prontos");
-        this.isInitialized = true;
-
-        this.emitInitProgress({
-          status: "ready",
-          message: "Aplicação pronta!",
-        });
-
-        return true;
-      } catch (error) {
-        console.error("[DownloadManager] Erro crítico ao inicializar:", error);
-        this.initPromise = null;
-        throw new Error(`Erro ao inicializar: ${error.message}`);
-      }
-    })();
-
-    return this.initPromise;
   }
 
   /**
@@ -85,12 +23,17 @@ class DownloadManager {
    */
   async getAvailableFormats(url) {
     try {
-      await this.initialize();
-
       console.log("[DownloadManager] Buscando formatos para:", url);
-      const info = await this.ytdlp.getInfoAsync(url);
 
-      if (!info.formats || info.formats.length === 0) {
+      const info = await this.executeYtDlp([
+        "--dump-json",
+        "--no-warnings",
+        url,
+      ]);
+
+      const data = JSON.parse(info);
+
+      if (!data.formats || data.formats.length === 0) {
         return {
           formats: [
             {
@@ -100,19 +43,19 @@ class DownloadManager {
               ext: "mp4",
             },
           ],
-          title: info.title || "Vídeo",
-          thumbnail: this.getBestThumbnail(info),
+          title: data.title || "Vídeo",
+          thumbnail: this.getBestThumbnail(data),
         };
       }
 
-      const formats = this.parseFormats(info);
+      const formats = this.parseFormats(data);
 
       return {
         formats,
-        title: info.title || "Vídeo",
-        thumbnail: this.getBestThumbnail(info),
-        duration: info.duration || null,
-        uploader: info.uploader || null,
+        title: data.title || "Vídeo",
+        thumbnail: this.getBestThumbnail(data),
+        duration: data.duration || null,
+        uploader: data.uploader || null,
       };
     } catch (error) {
       throw new Error("Erro ao obter formatos: " + error.message);
@@ -120,21 +63,56 @@ class DownloadManager {
   }
 
   /**
+   * Executa comando do yt-dlp
+   * @param {Array} args - Argumentos do yt-dlp
+   * @returns {Promise<string>} Saída do comando
+   */
+  executeYtDlp(args) {
+    return new Promise((resolve, reject) => {
+      let stdout = "";
+      let stderr = "";
+
+      const process = spawn(this.ytdlpPath, args, {
+        stdio: ["pipe", "pipe", "pipe"],
+      });
+
+      process.stdout.on("data", (data) => {
+        stdout += data.toString();
+      });
+
+      process.stderr.on("data", (data) => {
+        stderr += data.toString();
+      });
+
+      process.on("close", (code) => {
+        if (code === 0) {
+          resolve(stdout);
+        } else {
+          reject(new Error(stderr || `Erro no yt-dlp (código: ${code})`));
+        }
+      });
+
+      process.on("error", (error) => {
+        reject(new Error(`Erro ao executar yt-dlp: ${error.message}`));
+      });
+    });
+  }
+
+  /**
    * Obtém a melhor thumbnail disponível
-   * @param {Object} info - Informações do vídeo
+   * @param {Object} data - Dados do vídeo
    * @returns {string|null} URL da melhor thumbnail ou null
    */
-  getBestThumbnail(info) {
-    if (!info.thumbnails || info.thumbnails.length === 0) {
+  getBestThumbnail(data) {
+    if (!data.thumbnails || data.thumbnails.length === 0) {
       return null;
     }
 
-    // Procurar pela thumbnail com melhor resolução
-    let bestThumbnail = info.thumbnails[0];
+    let bestThumbnail = data.thumbnails[0];
     let maxResolution =
       (bestThumbnail.width || 0) * (bestThumbnail.height || 0);
 
-    info.thumbnails.forEach((thumb) => {
+    data.thumbnails.forEach((thumb) => {
       const resolution = (thumb.width || 0) * (thumb.height || 0);
       if (resolution > maxResolution) {
         maxResolution = resolution;
@@ -147,16 +125,14 @@ class DownloadManager {
 
   /**
    * Faz o parse dos formatos disponíveis
-   * @param {Object} info - Dados da informação do vídeo
+   * @param {Object} data - Dados do vídeo
    * @returns {Array} Array de formatos formatados
    */
-  parseFormats(info) {
+  parseFormats(data) {
     const formats = [];
     const videoFormats = new Map();
     const audioFormats = new Map();
     const combinedFormats = new Map();
-
-    const data = info;
 
     if (!data.formats || data.formats.length === 0) {
       return [
@@ -218,7 +194,7 @@ class DownloadManager {
       }
     });
 
-    // Adicionar formatos combinados primeiro (melhor qualidade)
+    // Adicionar formatos combinados primeiro
     combinedFormats.forEach((f) => {
       formats.push({
         id: f.format_id,
@@ -278,8 +254,6 @@ class DownloadManager {
    */
   async download(url, format, outputPath = null) {
     try {
-      await this.initialize();
-
       const downloadDir = outputPath || this.downloadPath;
 
       if (!fs.existsSync(downloadDir)) {
@@ -295,23 +269,21 @@ class DownloadManager {
       const formatArg = format === "best" ? "bestvideo+bestaudio/best" : format;
       const outputTemplate = path.join(downloadDir, "%(title)s.%(ext)s");
 
-      const output = await this.ytdlp.downloadAsync(url, {
-        format: formatArg,
-        mergeOutputFormat: "mp4",
-        output: outputTemplate,
-        onProgress: (progress) => {
-          this.emitProgress(progress.percentage);
-        },
-      });
+      const args = [
+        "-f",
+        formatArg,
+        "--merge-output-format",
+        "mp4",
+        "-o",
+        outputTemplate,
+        "--progress",
+        "--no-warnings",
+        "--ffmpeg-location",
+        this.ffmpegPath,
+        url,
+      ];
 
-      console.log("[DownloadManager] Download concluído com sucesso");
-
-      return {
-        success: true,
-        path: downloadDir,
-        message: "Download concluído com sucesso",
-        output: output,
-      };
+      return await this.executeDownload(args, downloadDir);
     } catch (error) {
       console.error("[DownloadManager] Erro no download:", error);
       throw new Error("Erro no download: " + error.message);
@@ -319,97 +291,64 @@ class DownloadManager {
   }
 
   /**
-   * Executa comando customizado do yt-dlp (máxima versatilidade)
-   * @param {string} url - URL do vídeo
-   * @param {Object} options - Opções customizadas
-   * @returns {Promise<string>} Saída do comando
+   * Executa o download com progresso
+   * @param {Array} args - Argumentos do yt-dlp
+   * @param {string} downloadDir - Diretório de download
+   * @returns {Promise<Object>} Resultado do download
    */
-  async executeCustom(url, options = {}) {
-    try {
-      await this.initialize();
+  executeDownload(args, downloadDir) {
+    return new Promise((resolve, reject) => {
+      let stderr = "";
+      let lastProgress = 0;
 
-      console.log(
-        "[DownloadManager] Executando comando customizado para:",
-        url
-      );
-
-      const output = await this.ytdlp.execAsync(url, {
-        onProgress: (progress) => {
-          this.emitProgress(progress.percentage);
-        },
-        ...options,
+      this.currentProcess = spawn(this.ytdlpPath, args, {
+        stdio: ["pipe", "pipe", "pipe"],
       });
 
-      return output;
-    } catch (error) {
-      throw new Error("Erro ao executar comando: " + error.message);
-    }
-  }
+      this.currentProcess.stdout.on("data", (data) => {
+        const str = data.toString();
 
-  /**
-   * Faz o stream de um vídeo
-   * @param {string} url - URL do vídeo
-   * @param {string} format - Formato desejado
-   * @returns {Object} Objeto com métodos pipe e pipeAsync
-   */
-  stream(url, format = "best") {
-    this.initialize().catch((error) => {
-      console.error(
-        "[DownloadManager] Erro ao inicializar para stream:",
-        error
-      );
+        // Detectar progresso
+        const progressMatch = str.match(/\[download\]\s+(\d+(?:\.\d+)?)%/);
+        if (progressMatch) {
+          const progress = parseFloat(progressMatch[1]);
+          const now = Date.now();
+
+          // Enviar progresso apenas a cada 500ms para evitar spam
+          if (now - lastProgress > 500 || progress === 100) {
+            this.emitProgress(progress);
+            lastProgress = now;
+          }
+        }
+      });
+
+      this.currentProcess.stderr.on("data", (data) => {
+        stderr += data.toString();
+      });
+
+      this.currentProcess.on("close", (code) => {
+        this.currentProcess = null;
+
+        if (code === 0) {
+          resolve({
+            success: true,
+            path: downloadDir,
+            message: "Download concluído com sucesso",
+          });
+        } else {
+          const errorLines = stderr.split("\n").filter((line) => line.trim());
+          const errorMessage =
+            errorLines[errorLines.length - 1] ||
+            `Erro no download (código: ${code})`;
+          reject(new Error(errorMessage));
+        }
+      });
+
+      this.currentProcess.on("error", (error) => {
+        this.currentProcess = null;
+        reject(new Error(`Erro ao executar download: ${error.message}`));
+      });
     });
-
-    const formatArg = format === "best" ? "bestvideo+bestaudio/best" : format;
-
-    return this.ytdlp.stream(url, {
-      format: formatArg,
-      onProgress: (progress) => {
-        this.emitProgress(progress.percentage);
-      },
-    });
-  }
-
-  /**
-   * Obtém informações do vídeo
-   * @param {string} url - URL do vídeo
-   * @returns {Promise<Object>} Informações do vídeo
-   */
-  async getVideoInfo(url) {
-    try {
-      await this.initialize();
-      return await this.ytdlp.getInfoAsync(url);
-    } catch (error) {
-      throw new Error("Erro ao obter informações do vídeo: " + error.message);
-    }
-  }
-
-  /**
-   * Obtém o título do vídeo
-   * @param {string} url - URL do vídeo
-   * @returns {Promise<string>} Título do vídeo
-   */
-  async getTitle(url) {
-    try {
-      await this.initialize();
-      return await this.ytdlp.getTitleAsync(url);
-    } catch (error) {
-      throw new Error("Erro ao obter título: " + error.message);
-    }
-  }
-
-  /**
-   * Obtém as thumbnails do vídeo
-   * @param {string} url - URL do vídeo
-   * @returns {Promise<Array>} Array de thumbnails
-   */
-  async getThumbnails(url) {
-    try {
-      await this.initialize();
-      return await this.ytdlp.getThumbnailsAsync(url);
-    } catch (error) {
-      throw new Error("Erro ao obter thumbnails: " + error.message);
-    }
   }
 
   /**
@@ -423,19 +362,6 @@ class DownloadManager {
   }
 
   /**
-   * Emitir evento de inicialização
-   * @param {Object} data - Dados do evento
-   */
-  emitInitProgress(data) {
-    if (this.progressCallback) {
-      this.progressCallback({
-        type: "init",
-        ...data,
-      });
-    }
-  }
-
-  /**
    * Registrar callback de progresso
    * @param {Function} callback - Função de callback
    */
@@ -444,11 +370,13 @@ class DownloadManager {
   }
 
   /**
-   * Verifica se o gerenciador está inicializado
-   * @returns {boolean} True se inicializado
+   * Cancela o download atual
    */
-  isReady() {
-    return this.isInitialized;
+  cancelDownload() {
+    if (this.currentProcess) {
+      this.currentProcess.kill();
+      this.currentProcess = null;
+    }
   }
 }
 
