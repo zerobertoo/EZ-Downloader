@@ -283,6 +283,8 @@ class DownloadManager {
         url,
       ];
 
+      var cmds = args.join(" ");
+
       return await this.executeDownload(args, downloadDir);
     } catch (error) {
       console.error("[DownloadManager] Erro no download:", error);

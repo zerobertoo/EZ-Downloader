@@ -6,8 +6,10 @@ const fs = require("fs");
  * Lê dados do package.json para evitar duplicação
  */
 
+// Caminho para o package.json
 const packageJsonPath = path.join(__dirname, "../package.json");
 
+// Ler o package.json
 let packageJson = {};
 try {
   const packageJsonContent = fs.readFileSync(packageJsonPath, "utf-8");
@@ -20,26 +22,67 @@ try {
  * Configuração da aplicação
  */
 const config = {
+  // Versão da aplicação (lida do package.json)
   version: packageJson.version || "1.0.0",
+
+  // Nome da aplicação
   name: packageJson.name || "ez-downloader",
+
+  // Descrição
   description:
     packageJson.description ||
     "A user-friendly desktop application for downloading videos",
+
+  // Autor
   author: packageJson.author || "zerobertoo",
+
+  // Licença
   license: packageJson.license || "MIT",
+
+  // Repositório
   repository:
     packageJson.repository?.url ||
     "https://github.com/zerobertoo/EZ-Downloader",
+
+  // Informações da aplicação
   app: {
     name: "EZ Downloader",
     displayName: "EZ Downloader",
   },
+
+  // Configurações de atualização
   update: {
     repo: "zerobertoo/EZ-Downloader",
     updateInterval: "1 hour",
   },
-  isDev: process.env.NODE_ENV || "production",
-  debug: process.env.DEBUG || "false",
+
+  // URLs e versões das dependências
+  dependencies: {
+    ytdlp: {
+      repo: "yt-dlp/yt-dlp",
+      windows: (version) =>
+        `https://github.com/yt-dlp/yt-dlp/releases/download/${version}/yt-dlp.exe`,
+      macos: (version) =>
+        `https://github.com/yt-dlp/yt-dlp/releases/download/${version}/yt-dlp_macos`,
+      linux: (version) =>
+        `https://github.com/yt-dlp/yt-dlp/releases/download/${version}/yt-dlp`,
+      apiEndpoint: "https://api.github.com/repos/yt-dlp/yt-dlp/releases/latest",
+    },
+    ffmpeg: {
+      apiEndpoint: "https://api.github.com/repos/BtbN/FFmpeg-Builds/releases/latest",
+      repo: "BtbN/FFmpeg-Builds",
+      windows: (version) =>
+        `https://github.com/BtbN/FFmpeg-Builds/releases/download/${version}/ffmpeg-master-latest-win64-gpl.zip`,
+      macos: (version) =>
+        `https://github.com/BtbN/FFmpeg-Builds/releases/download/${version}/ffmpeg-master-latest-macos64-gpl.zip`,
+      linux: (version) =>
+        `https://github.com/BtbN/FFmpeg-Builds/releases/download/${version}/ffmpeg-master-latest-linux64-gpl.tar.xz`,
+    },
+  },
+
+  // Configurações de desenvolvimento
+  isDev: process.env.NODE_ENV === "development",
+  debug: process.env.DEBUG === "true",
 };
 
 module.exports = config;

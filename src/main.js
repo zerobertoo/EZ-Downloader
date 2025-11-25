@@ -75,7 +75,13 @@ app.on("ready", async () => {
       ffmpegPath = depManager.getFFmpegPath();
 
       console.log(`[Main] yt-dlp: ${ytdlpPath}`);
+      console.log(
+        `[Main] yt-dlp existe: ${require("fs").existsSync(ytdlpPath)}`
+      );
       console.log(`[Main] FFmpeg: ${ffmpegPath}`);
+      console.log(
+        `[Main] FFmpeg existe: ${require("fs").existsSync(ffmpegPath)}`
+      );
 
       // Criar Download Manager com os caminhos
       downloadManager = new DownloadManager(ytdlpPath, ffmpegPath);

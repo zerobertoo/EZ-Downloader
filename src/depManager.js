@@ -1,10 +1,8 @@
 const fs = require("fs");
 const path = require("path");
 const https = require("https");
-const { execSync } = require("child_process");
-const os = require("os");
-const zlib = require("zlib");
 const tar = require("tar");
+const config = require("./config");
 
 class DependencyManager {
   constructor() {
@@ -19,7 +17,8 @@ class DependencyManager {
       this.depsDir = path.join(process.env.HOME, ".ez-downloader", "deps");
     }
 
-    this.ytdlpPath = path.join(this.depsDir, "yt-dlp");
+    // Define o caminho final do executável yt-dlp
+    this.ytdlpPath = path.join(this.depsDir, process.platform === "win32" ? "yt-dlp.exe" : "yt-dlp");
     this.ffmpegDir = path.join(this.depsDir, "ffmpeg");
     this.progressCallback = null;
 
@@ -36,8 +35,25 @@ class DependencyManager {
     return new Promise((resolve, reject) => {
       const file = fs.createWriteStream(destination);
 
-      https
-        .get(url, (response) => {
+      // Adiciona User-Agent para evitar bloqueio do GitHub e lida com redirecionamentos
+      https.get(url, { headers: { 'User-Agent': 'EZ-Downloader' } }, (response) => {
+          // Lidar com redirecionamentos (status 3xx)
+          if (response.statusCode >= 300 && response.statusCode < 400 && response.headers.location) {
+            console.log(`[DepManager] Redirecionando para: ${response.headers.location}`);
+            // Fecha a conexão atual e chama downloadFile recursivamente com a nova URL
+            response.destroy();
+            return this.downloadFile(response.headers.location, destination, onProgress)
+              .then(resolve)
+              .catch(reject);
+          }
+
+          if (response.statusCode !== 200) {
+            // Se o arquivo já existe, o createWriteStream pode ter aberto, então precisa fechar e deletar
+            file.close();
+            fs.unlink(destination, () => {});
+            return reject(new Error(`Falha ao baixar arquivo: ${response.statusCode} ${response.statusMessage} de ${url}`));
+          }
+
           const totalSize = parseInt(response.headers["content-length"], 10);
           let downloadedSize = 0;
 
@@ -70,7 +86,7 @@ class DependencyManager {
     return new Promise((resolve, reject) => {
       https
         .get(
-          "https://api.github.com/repos/yt-dlp/yt-dlp/releases/latest",
+          config.dependencies.ytdlp.apiEndpoint,
           {
             headers: { "User-Agent": "EZ-Downloader" },
           },
@@ -80,7 +96,8 @@ class DependencyManager {
             response.on("end", () => {
               try {
                 const json = JSON.parse(data);
-                const version = json.tag_name.replace("v", "");
+                // Retorna a tag_name completa (ex: '2024.05.27')
+                const version = json.tag_name;
                 resolve(version);
               } catch (e) {
                 reject(e);
@@ -101,38 +118,106 @@ class DependencyManager {
     try {
       const version = await this.getYtDlpLatestVersion();
       let url;
-      let filename;
 
       if (process.platform === "win32") {
-        filename = "yt-dlp.exe";
-        url = `https://github.com/yt-dlp/yt-dlp/releases/download/${version}/yt-dlp.exe`;
+        url = config.dependencies.ytdlp.windows(version);
       } else if (process.platform === "darwin") {
-        filename = "yt-dlp-macos";
-        url = `https://github.com/yt-dlp/yt-dlp/releases/download/${version}/yt-dlp_macos`;
+        url = config.dependencies.ytdlp.macos(version);
       } else {
-        filename = "yt-dlp";
-        url = `https://github.com/yt-dlp/yt-dlp/releases/download/${version}/yt-dlp`;
+        url = config.dependencies.ytdlp.linux(version);
       }
 
-      const downloadPath = path.join(this.depsDir, filename);
-
-      if (fs.existsSync(downloadPath)) {
+      if (fs.existsSync(this.ytdlpPath)) {
         console.log("[DepManager] yt-dlp já existe");
-        return downloadPath;
+        if (process.platform !== "win32") {
+          fs.chmodSync(this.ytdlpPath, "0755");
+        }
+        return this.ytdlpPath;
       }
 
-      await this.downloadFile(url, downloadPath, onProgress);
+      console.log(`[DepManager] Baixando yt-dlp de: ${url}`);
+      await this.downloadFile(url, this.ytdlpPath, onProgress);
 
-      // Tornar executável em Linux e macOS
-      if (process.platform !== "win32") {
-        fs.chmodSync(downloadPath, "0755");
+      console.log("[DepManager] Arquivo baixado, definindo permissões...");
+
+      try {
+        // A permissão 0755 é necessária para executáveis em sistemas Unix-like
+        if (process.platform !== "win32") {
+            fs.chmodSync(this.ytdlpPath, "0755");
+        }
+        console.log("[DepManager] Permissões definidas com sucesso");
+      } catch (chmodError) {
+        console.warn(
+          "[DepManager] Aviso ao definir permissões:",
+          chmodError.message
+        );
       }
 
       console.log("[DepManager] yt-dlp baixado com sucesso");
-      return downloadPath;
+      return this.ytdlpPath;
     } catch (error) {
       throw new Error(`Erro ao baixar yt-dlp: ${error.message}`);
     }
+  }
+
+  /**
+   * Obter URL de download do FFmpeg da API do GitHub
+   */
+  async getFFmpegDownloadUrl() {
+    return new Promise((resolve, reject) => {
+      https
+        .get(
+          config.dependencies.ffmpeg.apiEndpoint,
+          {
+            headers: { "User-Agent": "EZ-Downloader" },
+          },
+          (response) => {
+            let data = "";
+            response.on("data", (chunk) => (data += chunk));
+            response.on("end", () => {
+              try {
+                const json = JSON.parse(data);
+                const assets = json.assets;
+                let url = null;
+                let filename = null;
+
+                // O nome do arquivo deve ser dinâmico para garantir que a última versão seja baixada
+                // O BtbN/FFmpeg-Builds usa o formato: ffmpeg-master-latest-{os}{arch}-gpl.{ext}
+                let osName;
+                let archName = "64"; // Assumindo x64
+
+                if (process.platform === "win32") {
+                  osName = "win";
+                  filename = `ffmpeg-master-latest-${osName}${archName}-gpl.zip`;
+                } else if (process.platform === "darwin") {
+                  osName = "macos";
+                  filename = `ffmpeg-master-latest-${osName}${archName}-gpl.zip`;
+                } else {
+                  osName = "linux";
+                  filename = `ffmpeg-master-latest-${osName}${archName}-gpl.tar.xz`;
+                }
+
+                console.log("Procurando por:", filename);
+                const asset = assets.find(a => a.name.includes(filename));
+                console.log("Asset encontrado:", asset ? asset.name : "Nenhum");
+
+                if (asset) {
+                  url = asset.browser_download_url;
+                }
+
+                if (url) {
+                  resolve({ url, filename });
+                } else {
+                  reject(new Error(`Asset do FFmpeg não encontrado para ${process.platform} com o nome ${filename}`));
+                }
+              } catch (e) {
+                reject(e);
+              }
+            });
+          }
+        )
+        .on("error", reject);
+    });
   }
 
   /**
@@ -142,39 +227,37 @@ class DependencyManager {
     console.log("[DepManager] Baixando FFmpeg...");
 
     try {
-      // URLs dos builds estáticos do FFmpeg
-      let url;
-      let filename;
-
-      if (process.platform === "win32") {
-        filename = "ffmpeg-win64.zip";
-        url =
-          "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-n6.0-latest-win64-gpl-6.0.zip";
-      } else if (process.platform === "darwin") {
-        filename = "ffmpeg-macos.zip";
-        url =
-          "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-n6.0-latest-macos64-gpl-6.0.zip";
-      } else {
-        filename = "ffmpeg-linux.tar.xz";
-        url =
-          "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-n6.0-latest-linux64-gpl-6.0.tar.xz";
-      }
+      const { url, filename } = await this.getFFmpegDownloadUrl();
 
       const downloadPath = path.join(this.depsDir, filename);
 
-      if (fs.existsSync(this.ffmpegDir)) {
+      // Verifica se o executável do FFmpeg existe dentro do diretório de destino
+      if (fs.existsSync(this.ffmpegDir) && fs.existsSync(this.getFFmpegPath())) {
         console.log("[DepManager] FFmpeg já existe");
         return this.ffmpegDir;
       }
 
+      console.log(`[DepManager] Baixando FFmpeg de: ${url}`);
       await this.downloadFile(url, downloadPath, onProgress);
 
-      // Extrair arquivo
       console.log("[DepManager] Extraindo FFmpeg...");
       await this.extractFile(downloadPath, this.ffmpegDir);
 
-      // Remover arquivo de download
+      // Remove o arquivo compactado após a extração
       fs.unlinkSync(downloadPath);
+
+      // Garante permissão de execução para o binário do FFmpeg em sistemas Unix-like
+      if (process.platform !== "win32") {
+        try {
+            fs.chmodSync(this.getFFmpegPath(), "0755");
+            console.log("[DepManager] Permissões do FFmpeg definidas com sucesso");
+        } catch (chmodError) {
+            console.warn(
+                "[DepManager] Aviso ao definir permissões do FFmpeg:",
+                chmodError.message
+            );
+        }
+      }
 
       console.log("[DepManager] FFmpeg baixado e extraído com sucesso");
       return this.ffmpegDir;
@@ -192,17 +275,20 @@ class DependencyManager {
     }
 
     if (source.endsWith(".zip")) {
-      // Usar unzip nativo ou biblioteca
+      // AdmZip precisa ser instalado ou estar disponível no ambiente
       const AdmZip = require("adm-zip");
       const zip = new AdmZip(source);
+      // Extrai para o diretório de destino, sobrescrevendo arquivos existentes
       zip.extractAllTo(destination, true);
     } else if (source.endsWith(".tar.xz")) {
-      // Extrair tar.xz
+      // tar precisa ser instalado ou estar disponível no ambiente
       await tar.x({
         file: source,
         cwd: destination,
-        strip: 1,
+        strip: 1, // Remove o primeiro diretório do arquivo (comum em arquivos tar de binários)
       });
+    } else {
+        throw new Error(`Formato de arquivo não suportado para extração: ${source}`);
     }
   }
 
@@ -210,9 +296,10 @@ class DependencyManager {
    * Verificar se as dependências estão instaladas
    */
   checkDependencies() {
-    const ytdlpExists =
-      fs.existsSync(this.ytdlpPath) || fs.existsSync(this.ytdlpPath + ".exe");
-    const ffmpegExists = fs.existsSync(this.ffmpegDir);
+    // Verifica se o binário do yt-dlp existe no caminho esperado
+    const ytdlpExists = fs.existsSync(this.ytdlpPath);
+    // Verifica se o binário do FFmpeg existe no caminho esperado
+    const ffmpegExists = fs.existsSync(this.getFFmpegPath());
 
     return {
       ytdlp: ytdlpExists,
@@ -225,16 +312,14 @@ class DependencyManager {
    * Obter caminho do yt-dlp
    */
   getYtDlpPath() {
-    if (process.platform === "win32") {
-      return path.join(this.depsDir, "yt-dlp.exe");
-    }
-    return path.join(this.depsDir, "yt-dlp");
+    return this.ytdlpPath;
   }
 
   /**
    * Obter caminho do FFmpeg
    */
   getFFmpegPath() {
+    // O FFmpeg é extraído para this.ffmpegDir, e o binário está em 'bin/ffmpeg' (ou 'bin/ffmpeg.exe')
     const binDir = path.join(this.ffmpegDir, "bin");
     if (process.platform === "win32") {
       return path.join(binDir, "ffmpeg.exe");
@@ -270,6 +355,9 @@ class DependencyManager {
     return true;
   }
 
+  /**
+   * Registrar callback de progresso
+   */
   onProgress(callback) {
     this.progressCallback = callback;
   }
