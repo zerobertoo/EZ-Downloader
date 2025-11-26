@@ -56,27 +56,14 @@ const config = {
     updateInterval: "1 hour",
   },
 
-  // URLs e versões das dependências
+  // As dependências agora são gerenciadas por gerenciadores de pacotes nativos (Winget, Homebrew, pip, etc.)
   dependencies: {
+    // Mantendo a estrutura, mas sem URLs de download manual
     ytdlp: {
       repo: "yt-dlp/yt-dlp",
-      windows: (version) =>
-        `https://github.com/yt-dlp/yt-dlp/releases/download/${version}/yt-dlp.exe`,
-      macos: (version) =>
-        `https://github.com/yt-dlp/yt-dlp/releases/download/${version}/yt-dlp_macos`,
-      linux: (version) =>
-        `https://github.com/yt-dlp/yt-dlp/releases/download/${version}/yt-dlp`,
-      apiEndpoint: "https://api.github.com/repos/yt-dlp/yt-dlp/releases/latest",
     },
     ffmpeg: {
-      apiEndpoint: "https://api.github.com/repos/BtbN/FFmpeg-Builds/releases/latest",
       repo: "BtbN/FFmpeg-Builds",
-      windows: (version) =>
-        `https://github.com/BtbN/FFmpeg-Builds/releases/download/${version}/ffmpeg-master-latest-win64-gpl.zip`,
-      macos: (version) =>
-        `https://github.com/BtbN/FFmpeg-Builds/releases/download/${version}/ffmpeg-master-latest-macos64-gpl.zip`,
-      linux: (version) =>
-        `https://github.com/BtbN/FFmpeg-Builds/releases/download/${version}/ffmpeg-master-latest-linux64-gpl.tar.xz`,
     },
   },
 

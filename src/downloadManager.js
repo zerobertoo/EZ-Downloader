@@ -1,12 +1,16 @@
 const { spawn } = require("child_process");
+const YtDlpWrap = require("yt-dlp-wrap").default;
+const ytdlp = new YtDlpWrap();
+const ffmpegStatic = require("ffmpeg-static");
 const path = require("path");
 const os = require("os");
 const fs = require("fs");
 
 class DownloadManager {
-  constructor(ytdlpPath, ffmpegPath) {
-    this.ytdlpPath = ytdlpPath;
-    this.ffmpegPath = ffmpegPath;
+  constructor() {
+    // Os caminhos serão obtidos no momento da execução
+    this.ytdlpPath = null;
+    this.ffmpegPath = null;
     this.downloadPath = path.join(os.homedir(), "Downloads");
     this.progressCallback = null;
     this.currentProcess = null;
@@ -24,6 +28,9 @@ class DownloadManager {
   async getAvailableFormats(url) {
     try {
       console.log("[DownloadManager] Buscando formatos para:", url);
+
+      this.ytdlpPath = ytdlp.getBinaryPath();
+      this.ffmpegPath = ffmpegStatic;
 
       const info = await this.executeYtDlp([
         "--dump-json",
@@ -283,8 +290,6 @@ class DownloadManager {
         url,
       ];
 
-      var cmds = args.join(" ");
-
       return await this.executeDownload(args, downloadDir);
     } catch (error) {
       console.error("[DownloadManager] Erro no download:", error);
@@ -302,6 +307,9 @@ class DownloadManager {
     return new Promise((resolve, reject) => {
       let stderr = "";
       let lastProgress = 0;
+
+      this.ytdlpPath = ytdlp.getBinaryPath();
+      this.ffmpegPath = ffmpegStatic;
 
       this.currentProcess = spawn(this.ytdlpPath, args, {
         stdio: ["pipe", "pipe", "pipe"],

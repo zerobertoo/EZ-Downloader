@@ -32,6 +32,9 @@
     "dotenv": "^17.2.3",
     "electron-squirrel-startup": "^1.0.1",
     "tar": "^6.2.0",
+    "ffmpeg-static": "^5.2.0",
+    "yt-dlp-wrap": "^2.3.12",
+    "ytdl-core": "^4.11.5",
     "update-electron-app": "^3.1.1"
   }
 }
