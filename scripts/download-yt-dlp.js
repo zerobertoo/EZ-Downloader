@@ -17,7 +17,11 @@ const BINARIES = {
 
 function httpsGet(url, options = {}) {
   return new Promise((resolve, reject) => {
-    https.get(url, { ...options, headers: { 'User-Agent': 'ez-downloader/1.0' } }, (res) => {
+    const headers = { 'User-Agent': 'ez-downloader/1.0' };
+    if (process.env.GITHUB_TOKEN) {
+      headers['Authorization'] = `Bearer ${process.env.GITHUB_TOKEN}`;
+    }
+    https.get(url, { ...options, headers }, (res) => {
       if (res.statusCode === 301 || res.statusCode === 302) {
         httpsGet(res.headers.location, options).then(resolve).catch(reject);
         return;
@@ -66,6 +70,13 @@ async function main() {
   const release = await fetchJson(
     'https://api.github.com/repos/yt-dlp/yt-dlp/releases/latest'
   );
+
+  if (!release.tag_name || !release.assets) {
+    throw new Error(
+      `GitHub API error: ${release.message || JSON.stringify(release)}`
+    );
+  }
+
   console.log(`Latest version: ${release.tag_name}`);
 
   for (const platform of platforms) {

@@ -11,6 +11,7 @@ permissions:
 jobs:
   build:
     strategy:
+      fail-fast: false
       matrix:
         include:
           - os: ubuntu-latest
@@ -47,6 +48,8 @@ jobs:
 
       - name: Download yt-dlp binary
         run: node scripts/download-yt-dlp.js ${{ matrix.os == 'windows-latest' && 'win32' || matrix.os == 'macos-latest' && 'darwin' || 'linux' }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Make and Publish
         run: npm run publish
