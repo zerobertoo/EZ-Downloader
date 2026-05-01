@@ -38,7 +38,9 @@ jobs:
           fi
 
       - name: Bump version
-        run: npm version ${{ github.event.inputs.version }} --no-git-tag-version
+        run: |
+          npm pkg set version=${{ github.event.inputs.version }}
+          npm install --package-lock-only --ignore-scripts
 
       - name: Commit and tag
         run: |
