@@ -63,6 +63,7 @@ module.exports = {
           owner: "zerobertoo",
           name: "EZ-Downloader",
         },
+        draft: false,
         prerelease: process.env.PRERELEASE === "true",
         authToken: process.env.GITHUB_TOKEN,
         generateReleaseNotes: true,
