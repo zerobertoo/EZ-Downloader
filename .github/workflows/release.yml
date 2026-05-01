@@ -1,9 +1,12 @@
-name: Build and Publish
+name: Release
 
 on:
-  push:
-    tags:
-      - "v*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version (e.g. 1.5.0 or 1.5.0-beta.1)"
+        required: true
+        type: string
 
 permissions:
   contents: write
@@ -12,31 +15,76 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
+  # ─── Job 1: bump version, commit, create tag ───────────────────────────────
+  prepare:
+    name: Bump version and tag
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.tag.outputs.tag }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Validate version format
+        run: |
+          if ! echo "${{ github.event.inputs.version }}" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.]+)?$'; then
+            echo "::error::Invalid version '${{ github.event.inputs.version }}'. Expected X.Y.Z or X.Y.Z-suffix."
+            exit 1
+          fi
+
+      - name: Bump version
+        run: |
+          npm pkg set version=${{ github.event.inputs.version }}
+          npm install --package-lock-only --ignore-scripts
+
+      - name: Commit and push tag
+        id: tag
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add package.json package-lock.json
+          git commit -m "chore: bump version to ${{ github.event.inputs.version }}"
+          git tag v${{ github.event.inputs.version }}
+          git push origin main
+          git push origin v${{ github.event.inputs.version }}
+          echo "tag=v${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
+
+  # ─── Job 2: build + publish for each platform ──────────────────────────────
   build:
+    name: Build — ${{ matrix.os }} ${{ matrix.arch }}
+    needs: prepare
     strategy:
       fail-fast: false
       matrix:
         include:
           - os: ubuntu-latest
             arch: x64
+            platform: linux
           - os: windows-latest
             arch: x64
+            platform: win32
           - os: macos-latest
             arch: x64
+            platform: darwin
           - os: macos-latest
             arch: arm64
+            platform: darwin
 
     runs-on: ${{ matrix.os }}
 
     steps:
-      - name: Checkout repo
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.tag }}
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: 24
-          cache: 'npm'
+          cache: npm
 
       - name: Install dependencies
         run: npm ci
@@ -50,16 +98,16 @@ jobs:
           node --check public/renderer.js
 
       - name: Download yt-dlp binary
-        run: node scripts/download-yt-dlp.js ${{ matrix.os == 'windows-latest' && 'win32' || matrix.os == 'macos-latest' && 'darwin' || 'linux' }}
+        run: node scripts/download-yt-dlp.js ${{ matrix.platform }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Make and Publish
+      - name: Build and publish
         run: npm run publish
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TARGET_ARCH: ${{ matrix.arch }}
-          PRERELEASE: ${{ contains(github.ref, '-beta') || contains(github.ref, '-rc') || contains(github.ref, '-alpha') }}
+          PRERELEASE: ${{ contains(github.event.inputs.version, '-') }}
           APPLE_IDENTITY: ${{ secrets.APPLE_IDENTITY }}
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
