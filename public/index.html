@@ -7,7 +7,7 @@
     <link rel="stylesheet" href="styles.css" />
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline';"
+      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' https: data:;"
     />
   </head>
   <body>
@@ -51,6 +51,18 @@
         </section>
 
         <section id="formatsSection" class="formats-section hidden">
+          <div id="videoCard" class="video-card hidden">
+            <img
+              id="videoThumbnail"
+              class="video-thumbnail"
+              alt="Thumbnail do vídeo"
+            />
+            <div class="video-card-info">
+              <h2 id="videoTitle" class="video-card-title"></h2>
+              <p id="videoUploader" class="video-card-uploader"></p>
+            </div>
+          </div>
+
           <div class="form-group">
             <label for="formatSelect" class="label">Selecione o Formato</label>
             <select
@@ -113,6 +125,7 @@
             <div class="progress-bar">
               <div id="progressFill" class="progress-fill"></div>
             </div>
+            <p id="progressStats" class="progress-stats"></p>
             <button id="cancelBtn" class="btn btn-danger">Cancelar</button>
           </div>
         </section>

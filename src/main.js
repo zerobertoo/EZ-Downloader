@@ -8,6 +8,10 @@ const {
 } = require("electron");
 const path = require("path");
 const { DownloadManager } = require("./downloadManager");
+const { checkDependencies } = require("./dependencyChecker");
+const { getYtdlpBin } = require("./ytdlpPath");
+const { getFfmpegBin } = require("./ffmpegPath");
+const { createHandlers } = require("./ipcHandlers");
 const { updateElectronApp } = require("update-electron-app");
 const config = require("./config");
 
@@ -39,19 +43,48 @@ function createWindow() {
   mainWindow.on("closed", () => (mainWindow = null));
 }
 
-app.on("ready", () => {
+app.on("ready", async () => {
+  const ytdlpBin = getYtdlpBin(app.isPackaged);
+  const ffmpegBin = getFfmpegBin(app.isPackaged);
+  const deps = await checkDependencies(ytdlpBin, ffmpegBin);
+
+  if (!deps.ytdlp.available) {
+    dialog.showMessageBoxSync({
+      type: "error",
+      title: "Dependência não encontrada",
+      message: "yt-dlp não foi encontrado no PATH.",
+      detail:
+        "Instale via:\n  pip install yt-dlp\n  ou\n  winget install yt-dlp\n\nReinicie o aplicativo após a instalação.",
+      buttons: ["Fechar"],
+    });
+    app.quit();
+    return;
+  }
+
   // Configurar auto-update
   updateElectronApp({
     repo: config.update.repo,
     updateInterval: config.update.updateInterval,
   });
 
-  downloadManager = new DownloadManager();
+  downloadManager = new DownloadManager(ytdlpBin, ffmpegBin);
   downloadManager.onProgress((progress) => {
     if (mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.webContents.send("download-progress", progress);
     }
   });
+
+  const handlers = createHandlers({
+    downloadManager,
+    getMainWindow: () => mainWindow,
+    app,
+    dialog,
+    shell,
+  });
+  Object.entries(handlers).forEach(([channel, handler]) => {
+    ipcMain.handle(channel, handler);
+  });
+
   createWindow();
   createMenu();
 });
@@ -123,106 +156,5 @@ function createMenu() {
   Menu.setApplicationMenu(Menu.buildFromTemplate(template));
 }
 
-// IPC Handlers
-ipcMain.handle("get-version", () => {
-  return config.version;
-});
-
-ipcMain.handle("get-app-info", () => {
-  return {
-    version: config.version,
-    name: config.app.displayName,
-    description: config.description,
-    author: config.author,
-    repository: config.repository,
-  };
-});
-
-ipcMain.handle("get-formats", async (_, url) => {
-  try {
-    // Validação básica de URL
-    if (!url || typeof url !== "string") {
-      return {
-        success: false,
-        error: "URL inválida",
-      };
-    }
-
-    const formats = await downloadManager.getAvailableFormats(url);
-    return { success: true, formats };
-  } catch (error) {
-    console.error("Erro ao buscar formatos:", error);
-    return {
-      success: false,
-      error: error.message || "Erro desconhecido ao buscar formatos",
-    };
-  }
-});
-
-ipcMain.handle("start-download", async (_, { url, format, outputPath }) => {
-  try {
-    // Validações
-    if (!url || !format || !outputPath) {
-      return {
-        success: false,
-        error: "URL, formato ou caminho de saída inválido",
-      };
-    }
-
-    const result = await downloadManager.download(url, format, outputPath);
-    return { success: true, result };
-  } catch (error) {
-    console.error("Erro no download:", error);
-    return {
-      success: false,
-      error: error.message || "Erro desconhecido no download",
-    };
-  }
-});
-
-ipcMain.handle("select-download-path", async () => {
-  try {
-    const result = await dialog.showOpenDialog(mainWindow, {
-      properties: ["openDirectory"],
-    });
-    return result.filePaths[0] || null;
-  } catch (error) {
-    console.error("Erro ao selecionar diretório:", error);
-    return null;
-  }
-});
-
-ipcMain.handle("open-path", async (_, filePath) => {
-  try {
-    if (!filePath || typeof filePath !== "string") {
-      return { success: false, error: "Caminho inválido" };
-    }
-
-    await shell.openPath(filePath);
-    return { success: true };
-  } catch (error) {
-    console.error("Erro ao abrir caminho:", error);
-    return { success: false, error: error.message };
-  }
-});
-
-ipcMain.handle("getDownloadsPath", () => {
-  try {
-    return app.getPath("downloads");
-  } catch (error) {
-    console.error("Erro ao obter caminho de downloads:", error);
-    return null;
-  }
-});
-
-ipcMain.handle("cancel-download", () => {
-  try {
-    downloadManager.cancelDownload();
-    return { success: true };
-  } catch (error) {
-    console.error("Erro ao cancelar download:", error);
-    return { success: false, error: error.message };
-  }
-});
 
 

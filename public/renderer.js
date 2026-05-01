@@ -1,11 +1,33 @@
 "use strict";
 
+const UI_STRINGS = {
+  errorNoUrl: "Por favor, insira uma URL",
+  errorInvalidUrl: "URL inválida. Insira uma URL completa (ex: https://youtube.com/...)",
+  errorNoFormats: "Nenhum formato disponível para este vídeo",
+  errorFetchFormats: "Erro ao buscar formatos:",
+  errorNoFormat: "Por favor, selecione um formato",
+  errorNoPath: "Por favor, selecione um diretório de download",
+  errorDownloadActive: "Um download já está em andamento",
+  errorSelectDir: "Erro ao selecionar diretório",
+  errorOpenFolder: "Erro ao abrir pasta de downloads",
+  errorReset: "Erro ao resetar a aplicação",
+  errorCancel: "Erro ao cancelar download",
+  errorNoDownloadPath: "Nenhum caminho de download definido",
+  errorDownload: "Erro no download:",
+  errorInit: "Erro ao inicializar a aplicação",
+  progressStarting: "Iniciando download...",
+  progressDownloading: "Baixando...",
+  progressFinalizing: "Finalizando...",
+  progressComplete: "Download concluído!",
+};
+
 const state = {
   currentUrl: "",
   selectedFormat: null,
   downloadPath: null,
   formats: [],
   isDownloading: false,
+  videoMetadata: { title: null, thumbnail: null, uploader: null },
 };
 
 // Elementos do DOM
@@ -30,10 +52,15 @@ const elements = {
   progressFill: document.getElementById("progressFill"),
   progressText: document.getElementById("progressText"),
   progressPercent: document.getElementById("progressPercent"),
+  progressStats: document.getElementById("progressStats"),
   formatInfo: document.getElementById("formatInfo"),
   errorText: document.getElementById("errorText"),
   successText: document.getElementById("successText"),
   version: document.getElementById("version"),
+  videoCard: document.getElementById("videoCard"),
+  videoThumbnail: document.getElementById("videoThumbnail"),
+  videoTitle: document.getElementById("videoTitle"),
+  videoUploader: document.getElementById("videoUploader"),
 };
 
 // Inicializar a aplicação
@@ -76,7 +103,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     showSection("input");
   } catch (error) {
     console.error("Erro ao inicializar:", error);
-    showError("Erro ao inicializar a aplicação");
+    showError(UI_STRINGS.errorInit);
   }
 });
 
@@ -87,12 +114,12 @@ async function handleFetchFormats() {
   const url = elements.urlInput?.value?.trim();
 
   if (!url) {
-    showError("Por favor, insira uma URL");
+    showError(UI_STRINGS.errorNoUrl);
     return;
   }
 
   if (!isValidUrl(url)) {
-    showError("URL inválida. Insira uma URL completa (ex: https://youtube.com/...)");
+    showError(UI_STRINGS.errorInvalidUrl);
     return;
   }
 
@@ -107,17 +134,50 @@ async function handleFetchFormats() {
     }
 
     if (!result.formats || result.formats.length === 0) {
-      throw new Error("Nenhum formato disponível para este vídeo");
+      throw new Error(UI_STRINGS.errorNoFormats);
     }
 
     state.formats = result.formats;
+    state.videoMetadata = {
+      title: result.title || null,
+      thumbnail: result.thumbnail || null,
+      uploader: result.uploader || null,
+    };
     populateFormatSelect();
+    displayVideoMetadata();
     showSection("formats");
   } catch (error) {
     console.error("Erro ao buscar formatos:", error);
-    showError(`Erro ao buscar formatos: ${error.message}`);
+    showError(`${UI_STRINGS.errorFetchFormats} ${error.message}`);
     showSection("input");
   }
+}
+
+/**
+ * Exibir card com thumbnail, título e canal do vídeo
+ */
+function displayVideoMetadata() {
+  const { title, thumbnail, uploader } = state.videoMetadata;
+
+  if (elements.videoTitle) elements.videoTitle.textContent = title || "Vídeo";
+  if (elements.videoUploader) elements.videoUploader.textContent = uploader ? `Por: ${uploader}` : "";
+
+  if (elements.videoThumbnail) {
+    if (thumbnail) {
+      elements.videoThumbnail.src = thumbnail;
+      elements.videoThumbnail.onerror = showThumbnailPlaceholder;
+    } else {
+      showThumbnailPlaceholder();
+    }
+  }
+
+  elements.videoCard?.classList.remove("hidden");
+}
+
+function showThumbnailPlaceholder() {
+  if (!elements.videoThumbnail) return;
+  elements.videoThumbnail.src =
+    "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 320 180'%3E%3Crect fill='%23333' width='320' height='180'/%3E%3Cpath fill='%23666' d='M145 85l45 27v-54z'/%3E%3C/svg%3E";
 }
 
 /**
@@ -131,7 +191,8 @@ function populateFormatSelect() {
   state.formats.forEach((format) => {
     const option = document.createElement("option");
     option.value = format.id;
-    option.textContent = format.label;
+    const sizeStr = format.filesize ? ` — ${formatFileSize(format.filesize)}` : "";
+    option.textContent = format.label + sizeStr;
     option.dataset.format = JSON.stringify(format);
     elements.formatSelect.appendChild(option);
   });
@@ -192,7 +253,7 @@ async function handleSelectPath() {
     }
   } catch (error) {
     console.error("Erro ao selecionar diretório:", error);
-    showError("Erro ao selecionar diretório");
+    showError(UI_STRINGS.errorSelectDir);
   }
 }
 
@@ -210,17 +271,17 @@ function updateDownloadPathDisplay() {
  */
 async function handleDownload() {
   if (!state.selectedFormat) {
-    showError("Por favor, selecione um formato");
+    showError(UI_STRINGS.errorNoFormat);
     return;
   }
 
   if (!state.downloadPath) {
-    showError("Por favor, selecione um diretório de download");
+    showError(UI_STRINGS.errorNoPath);
     return;
   }
 
   if (state.isDownloading) {
-    showError("Um download já está em andamento");
+    showError(UI_STRINGS.errorDownloadActive);
     return;
   }
 
@@ -245,7 +306,7 @@ async function handleDownload() {
     showSuccess(result.result);
   } catch (error) {
     console.error("Erro no download:", error);
-    showError(`Erro no download: ${error.message}`);
+    showError(`${UI_STRINGS.errorDownload} ${error.message}`);
     showSection("error");
   } finally {
     state.isDownloading = false;
@@ -255,7 +316,8 @@ async function handleDownload() {
 /**
  * Atualizar progresso do download
  */
-function updateProgress(percent) {
+function updateProgress(data) {
+  const percent = typeof data === "object" ? data.percent : data;
   const clamped = Math.min(Math.max(percent, 0), 100);
 
   if (elements.progressFill) {
@@ -268,14 +330,23 @@ function updateProgress(percent) {
 
   if (elements.progressText) {
     if (clamped < 30) {
-      elements.progressText.textContent = "Iniciando download...";
+      elements.progressText.textContent = UI_STRINGS.progressStarting;
     } else if (clamped < 70) {
-      elements.progressText.textContent = "Baixando...";
+      elements.progressText.textContent = UI_STRINGS.progressDownloading;
     } else if (clamped < 100) {
-      elements.progressText.textContent = "Finalizando...";
+      elements.progressText.textContent = UI_STRINGS.progressFinalizing;
     } else {
-      elements.progressText.textContent = "Download concluído!";
+      elements.progressText.textContent = UI_STRINGS.progressComplete;
     }
+  }
+
+  if (elements.progressStats && typeof data === "object") {
+    const parts = [];
+    if (data.speed) parts.push(data.speed);
+    if (data.eta) parts.push(`ETA ${data.eta}`);
+    elements.progressStats.textContent = parts.join(" • ");
+  } else if (elements.progressStats && clamped >= 100) {
+    elements.progressStats.textContent = "";
   }
 }
 
@@ -296,7 +367,7 @@ async function handleCancel() {
     showSection("formats");
   } catch (error) {
     console.error("Erro ao cancelar:", error);
-    showError("Erro ao cancelar download");
+    showError(UI_STRINGS.errorCancel);
   }
 }
 
@@ -335,14 +406,15 @@ async function handleReset() {
     state.selectedFormat = null;
     state.formats = [];
     state.isDownloading = false;
+    state.videoMetadata = { title: null, thumbnail: null, uploader: null };
 
-    if (elements.urlInput) {
-      elements.urlInput.value = "";
-    }
+    if (elements.urlInput) elements.urlInput.value = "";
+    if (elements.formatSelect) elements.formatSelect.innerHTML = "";
 
-    if (elements.formatSelect) {
-      elements.formatSelect.innerHTML = "";
-    }
+    if (elements.videoCard) elements.videoCard.classList.add("hidden");
+    if (elements.videoThumbnail) elements.videoThumbnail.src = "";
+    if (elements.videoTitle) elements.videoTitle.textContent = "";
+    if (elements.videoUploader) elements.videoUploader.textContent = "";
 
     const downloadsPath = await window.electronAPI.getDownloadsPath();
     if (downloadsPath) {
@@ -353,7 +425,7 @@ async function handleReset() {
     showSection("input");
   } catch (error) {
     console.error("Erro ao resetar:", error);
-    showError("Erro ao resetar a aplicação");
+    showError(UI_STRINGS.errorReset);
   }
 }
 
@@ -362,7 +434,7 @@ async function handleReset() {
  */
 async function handleOpenFolder() {
   if (!state.downloadPath) {
-    showError("Nenhum caminho de download definido");
+    showError(UI_STRINGS.errorNoDownloadPath);
     return;
   }
 
@@ -373,7 +445,7 @@ async function handleOpenFolder() {
     }
   } catch (error) {
     console.error("Erro ao abrir pasta:", error);
-    showError("Erro ao abrir pasta de downloads");
+    showError(UI_STRINGS.errorOpenFolder);
   }
 }
 

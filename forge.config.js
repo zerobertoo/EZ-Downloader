@@ -1,15 +1,40 @@
 const { FusesPlugin } = require("@electron-forge/plugin-fuses");
 const { FuseV1Options, FuseVersion } = require("@electron/fuses");
-require("dotenv").config();
+const fs = require("fs");
+const path = require("path");
+
+if (process.env.GITHUB_TOKEN) {
+  require("dotenv").config();
+}
+
+const osxSignConfig = process.env.APPLE_IDENTITY
+  ? {
+      osxSign: { identity: process.env.APPLE_IDENTITY },
+      osxNotarize: {
+        appleId: process.env.APPLE_ID,
+        appleIdPassword: process.env.APPLE_PASSWORD,
+        teamId: process.env.APPLE_TEAM_ID,
+      },
+    }
+  : {};
+
+// Include bundled yt-dlp binary if it exists for the current platform
+const binName = process.platform === "win32" ? "yt-dlp.exe" : "yt-dlp";
+const binPath = path.join("resources", "bin", process.platform, binName);
+const extraResource = fs.existsSync(binPath) ? [binPath] : [];
 
 module.exports = {
   packagerConfig: {
     name: "EZ Downloader",
     executableName: "ez-downloader",
     appBundleId: "com.ezdownloader.app",
-    asar: true,
-    osxSign: {},
+    asar: {
+      unpack: "**/node_modules/ffmpeg-static/**",
+    },
+    arch: process.env.TARGET_ARCH || "x64",
     appCategoryType: "public.app-category.utilities",
+    extraResource,
+    ...osxSignConfig,
   },
   rebuildConfig: {},
   makers: [
@@ -38,7 +63,7 @@ module.exports = {
           owner: "zerobertoo",
           name: "EZ-Downloader",
         },
-        prerelease: true,
+        prerelease: process.env.PRERELEASE === "true",
         authToken: process.env.GITHUB_TOKEN,
         generateReleaseNotes: true,
       },

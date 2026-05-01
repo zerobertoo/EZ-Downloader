@@ -12,7 +12,15 @@ jobs:
   build:
     strategy:
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
+        include:
+          - os: ubuntu-latest
+            arch: x64
+          - os: windows-latest
+            arch: x64
+          - os: macos-latest
+            arch: x64
+          - os: macos-latest
+            arch: arm64
 
     runs-on: ${{ matrix.os }}
 
@@ -24,11 +32,29 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
+          cache: 'npm'
 
       - name: Install dependencies
-        run: npm install
+        run: npm ci
+
+      - name: Validate syntax
+        run: |
+          node --check src/main.js
+          node --check src/downloadManager.js
+          node --check src/dependencyChecker.js
+          node --check src/config.js
+          node --check public/renderer.js
+
+      - name: Download yt-dlp binary
+        run: node scripts/download-yt-dlp.js ${{ matrix.os == 'windows-latest' && 'win32' || matrix.os == 'macos-latest' && 'darwin' || 'linux' }}
 
       - name: Make and Publish
         run: npm run publish
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TARGET_ARCH: ${{ matrix.arch }}
+          PRERELEASE: ${{ contains(github.ref, '-beta') || contains(github.ref, '-rc') || contains(github.ref, '-alpha') }}
+          APPLE_IDENTITY: ${{ secrets.APPLE_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}

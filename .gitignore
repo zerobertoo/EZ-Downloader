@@ -141,3 +141,5 @@ vite.config.ts.timestamp-*
 .vite/
 
 notes*
+# Bundled yt-dlp binaries (downloaded by scripts/download-yt-dlp.js before packaging)
+resources/bin/
