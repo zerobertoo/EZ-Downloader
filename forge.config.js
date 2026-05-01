@@ -18,10 +18,10 @@ const osxSignConfig = process.env.APPLE_IDENTITY
     }
   : {};
 
-// Include bundled yt-dlp binary if it exists for the current platform
-const binName = process.platform === "win32" ? "yt-dlp.exe" : "yt-dlp";
-const binPath = path.join("resources", "bin", process.platform, binName);
-const extraResource = fs.existsSync(binPath) ? [binPath] : [];
+// Include the whole resources/bin/ directory so the platform subfolder
+// structure is preserved inside <resources>/bin/<platform>/<binary>
+const binDir = path.join("resources", "bin");
+const extraResource = fs.existsSync(binDir) ? [binDir] : [];
 
 module.exports = {
   packagerConfig: {
