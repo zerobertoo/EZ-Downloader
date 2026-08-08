@@ -1,6 +1,6 @@
 [package]
 name = "ez-downloader-tauri"
-version = "2.1.0"
+version = "2.1.1"
 description = "A user-friendly desktop application for downloading videos and audio from YouTube and other platforms using yt-dlp"
 authors = ["zerobertoo"]
 edition = "2021"
