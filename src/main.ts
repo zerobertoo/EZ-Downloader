@@ -266,7 +266,12 @@ document.addEventListener("DOMContentLoaded", async () => {
   });
 
   elements.urlInput?.addEventListener("keypress", (e) => {
-    if (e.key === "Enter") handleFetchFormats();
+    if (e.key !== "Enter") return;
+    if (currentMode() === "basic") {
+      handleQuickDownload();
+    } else {
+      handleFetchFormats();
+    }
   });
 
   // Editar a URL sai de done/failed e reavalia se o vídeo carregado ainda
@@ -310,7 +315,8 @@ function setPhase(phase: Phase) {
 function render() {
   const phase = state.phase;
   const hasVideo =
-    phase === "ready" || phase === "downloading" || phase === "done" || phase === "failed";
+    currentMode() === "advanced" &&
+    (phase === "ready" || phase === "downloading" || phase === "done" || phase === "failed");
 
   elements.app?.setAttribute("data-phase", phase);
   elements.app?.setAttribute("data-hero", hasVideo ? "collapsed" : "full");

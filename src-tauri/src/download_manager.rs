@@ -231,6 +231,7 @@ impl DownloadManager {
         args.push("-o".to_string());
         args.push(output_template.to_string_lossy().to_string());
         args.push("--progress".to_string());
+        args.push("--newline".to_string());
         args.push("--no-warnings".to_string());
         args.push(url.to_string());
 
