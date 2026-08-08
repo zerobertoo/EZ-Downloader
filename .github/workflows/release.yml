@@ -34,16 +34,22 @@ jobs:
           fi
 
       - name: Bump version
+        env:
+          VERSION: ${{ github.event.inputs.version }}
         run: |
-          npm pkg set version=${{ github.event.inputs.version }}
+          npm pkg set version="$VERSION"
           npm install --package-lock-only --ignore-scripts
+          # O crate Rust não lê a versão do package.json, então precisa
+          # acompanhar — senão os metadados do binário ficam para trás.
+          sed -i "0,/^version = .*/s//version = \"$VERSION\"/" src-tauri/Cargo.toml
+          sed -i "/^name = \"ez-downloader-tauri\"$/{n;s/^version = .*/version = \"$VERSION\"/}" src-tauri/Cargo.lock
 
       - name: Commit and push tag
         id: tag
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add package.json package-lock.json
+          git add package.json package-lock.json src-tauri/Cargo.toml src-tauri/Cargo.lock
           # A versão pedida pode já estar commitada no repo. Nesse caso não há
           # o que commitar, e seguir direto para a tag é o comportamento certo.
           if git diff --cached --quiet; then
