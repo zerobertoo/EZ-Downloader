@@ -44,9 +44,15 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add package.json package-lock.json
-          git commit -m "chore: bump version to ${{ github.event.inputs.version }}"
+          # A versão pedida pode já estar commitada no repo. Nesse caso não há
+          # o que commitar, e seguir direto para a tag é o comportamento certo.
+          if git diff --cached --quiet; then
+            echo "Versão ${{ github.event.inputs.version }} já está no repositório; nada a commitar."
+          else
+            git commit -m "chore: bump version to ${{ github.event.inputs.version }}"
+            git push origin main
+          fi
           git tag v${{ github.event.inputs.version }}
-          git push origin main
           git push origin v${{ github.event.inputs.version }}
           echo "tag=v${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
 
