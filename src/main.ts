@@ -1,4 +1,7 @@
 import { bridge, type FormatOption, type DownloadProgress } from "./bridge";
+import { THEMES, initTheme, setTheme, currentThemeId } from "./theme";
+
+initTheme();
 
 const UI_STRINGS = {
   errorNoUrl: "Por favor, insira uma URL",
@@ -69,10 +72,56 @@ const elements = {
   openFolderBtn: document.getElementById("openFolderBtn") as HTMLButtonElement | null,
   retryBtn: document.getElementById("retryBtn") as HTMLButtonElement | null,
   version: document.getElementById("version"),
+  themeToggleBtn: document.getElementById("themeToggleBtn") as HTMLButtonElement | null,
+  themePopover: document.getElementById("themePopover"),
 };
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+/* ════════════════════════════════════════════════════════════════
+   SELETOR DE TEMA
+   ════════════════════════════════════════════════════════════════ */
+
+function renderThemePopover() {
+  if (!elements.themePopover) return;
+  elements.themePopover.innerHTML = "";
+  const active = currentThemeId();
+
+  THEMES.forEach((theme) => {
+    const swatch = document.createElement("button");
+    swatch.type = "button";
+    swatch.className = "theme-swatch" + (theme.id === active ? " is-active" : "");
+    swatch.style.background = `linear-gradient(135deg, ${theme.accent}, ${theme.accentBright})`;
+    swatch.setAttribute("role", "menuitemradio");
+    swatch.setAttribute("aria-checked", String(theme.id === active));
+    swatch.setAttribute("aria-label", theme.label);
+    swatch.title = theme.label;
+    swatch.addEventListener("click", () => {
+      setTheme(theme.id);
+      renderThemePopover();
+      closeThemePopover();
+    });
+    elements.themePopover?.appendChild(swatch);
+  });
+}
+
+function toggleThemePopover() {
+  const isHidden = elements.themePopover?.classList.contains("hidden");
+  if (isHidden) openThemePopover();
+  else closeThemePopover();
+}
+
+function openThemePopover() {
+  renderThemePopover();
+  elements.themePopover?.classList.remove("hidden");
+  elements.themeToggleBtn?.setAttribute("aria-expanded", "true");
+}
+
+function closeThemePopover() {
+  elements.themePopover?.classList.add("hidden");
+  elements.themeToggleBtn?.setAttribute("aria-expanded", "false");
 }
 
 document.addEventListener("DOMContentLoaded", async () => {
@@ -83,6 +132,16 @@ document.addEventListener("DOMContentLoaded", async () => {
   elements.cancelBtn?.addEventListener("click", handleCancel);
   elements.retryBtn?.addEventListener("click", handleRetry);
   elements.openFolderBtn?.addEventListener("click", handleOpenFolder);
+  elements.themeToggleBtn?.addEventListener("click", (e) => {
+    e.stopPropagation();
+    toggleThemePopover();
+  });
+  document.addEventListener("click", (e) => {
+    const popover = elements.themePopover;
+    if (popover && !popover.classList.contains("hidden") && !popover.contains(e.target as Node) && e.target !== elements.themeToggleBtn) {
+      closeThemePopover();
+    }
+  });
 
   elements.urlInput?.addEventListener("keypress", (e) => {
     if (e.key === "Enter") handleFetchFormats();
