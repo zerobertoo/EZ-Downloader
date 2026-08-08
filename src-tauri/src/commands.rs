@@ -32,17 +32,23 @@ pub fn get_app_info(app: AppHandle) -> AppInfo {
 }
 
 #[tauri::command]
-pub fn get_formats(manager: State<DownloadManager>, url: String) -> Result<FormatsResult, String> {
+pub async fn get_formats(
+    manager: State<'_, DownloadManager>,
+    url: String,
+) -> Result<FormatsResult, String> {
     if url.trim().is_empty() {
         return Err("URL inválida".to_string());
     }
-    manager.get_available_formats(&url)
+    let manager = manager.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || manager.get_available_formats(&url))
+        .await
+        .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
-pub fn start_download(
+pub async fn start_download(
     app: AppHandle,
-    manager: State<DownloadManager>,
+    manager: State<'_, DownloadManager>,
     url: String,
     format: String,
     output_path: String,
@@ -50,7 +56,12 @@ pub fn start_download(
     if url.trim().is_empty() || format.trim().is_empty() || output_path.trim().is_empty() {
         return Err("URL, formato ou caminho de saída inválido".to_string());
     }
-    manager.download(&app, &url, &format, Some(output_path))
+    let manager = manager.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        manager.download(&app, &url, &format, Some(output_path))
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]

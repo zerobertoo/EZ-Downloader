@@ -30,6 +30,7 @@ pub struct DownloadResult {
     pub message: String,
 }
 
+#[derive(Clone)]
 pub struct DownloadManager {
     ytdlp_bin: String,
     ffmpeg_bin: Option<String>,

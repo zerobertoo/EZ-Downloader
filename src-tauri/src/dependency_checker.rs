@@ -5,8 +5,15 @@ pub struct DependencyStatus {
 }
 
 fn check_dependency(bin: &str) -> DependencyStatus {
-    let available = Command::new(bin)
-        .arg("--version")
+    let mut command = Command::new(bin);
+    command.arg("--version");
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x08000000;
+        command.creation_flags(CREATE_NO_WINDOW);
+    }
+    let available = command
         .output()
         .map(|o| o.status.success())
         .unwrap_or(false);
