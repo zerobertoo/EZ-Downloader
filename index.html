@@ -13,7 +13,7 @@
   <body>
     <div class="noise-overlay" aria-hidden="true"></div>
 
-    <div id="app" data-phase="idle" data-hero="full">
+    <div id="app" data-phase="idle" data-hero="full" data-mode="basic">
 
       <!-- ── Titlebar ── -->
       <header class="app-header">
@@ -28,6 +28,12 @@
         </div>
         <div class="header-actions">
           <span id="version" class="version-chip">v—</span>
+          <button id="nerdModeBtn" class="mode-pill" aria-label="Modo Nerd" aria-pressed="false" title="Modo Nerd — mostra o comando e o log ao vivo">
+            🤓 Nerd
+          </button>
+          <button id="modeToggleBtn" class="mode-pill" aria-label="Alternar Básico/Avançado">
+            <span id="modeToggleLabel">Básico</span>
+          </button>
           <button id="themeToggleBtn" class="theme-btn" aria-label="Escolher tema" aria-expanded="false">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
               <circle cx="13.5" cy="6.5" r="2.5" fill="currentColor"/>
@@ -73,7 +79,7 @@
                   aria-label="URL do vídeo"
                 />
               </div>
-              <button id="fetchFormatsBtn" class="fetch-btn" aria-label="Buscar formatos">
+              <button id="fetchFormatsBtn" class="fetch-btn mode-advanced-only" aria-label="Buscar formatos">
                 <svg class="fetch-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                   <circle cx="11" cy="11" r="8" stroke="currentColor" stroke-width="2.2"/>
                   <path d="m21 21-4.35-4.35" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>
@@ -83,7 +89,32 @@
               </button>
             </div>
 
+            <!-- ── Modo Rápido: toggle MP3/MP4 + Baixar, sem tela de metadados ── -->
+            <div id="quickControls" class="quick-controls mode-basic-only">
+              <div class="quick-format-toggle" role="radiogroup" aria-label="Formato de download">
+                <button id="quickMp4Btn" class="quick-format-option is-active" type="button" role="radio" aria-checked="true" data-format="mp4">Vídeo (MP4)</button>
+                <button id="quickMp3Btn" class="quick-format-option" type="button" role="radio" aria-checked="false" data-format="mp3">Áudio (MP3)</button>
+              </div>
+              <button id="quickDownloadBtn" class="download-btn quick-download-btn">
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+                  <polyline points="7 10 12 15 17 10" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+                  <line x1="12" y1="15" x2="12" y2="3" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>
+                </svg>
+                Baixar
+              </button>
+            </div>
+
             <p id="urlError" class="field-error" role="alert"></p>
+          </div>
+
+          <!-- ── Modo Nerd: comando montado + log ao vivo ── -->
+          <div id="debugPanel" class="debug-panel hidden">
+            <div class="debug-panel-header">
+              <span class="debug-panel-title">🤓 Bastidores</span>
+            </div>
+            <code id="debugCommand" class="debug-command"></code>
+            <div id="debugLog" class="debug-log" aria-live="off"></div>
           </div>
 
           <!-- ════════════════ LOADING ════════════════ -->
@@ -133,6 +164,34 @@
 
             <div class="field-divider" role="separator" aria-hidden="true"></div>
 
+            <!-- Corte por tempo -->
+            <div class="field-group">
+              <label class="field-label">Corte (opcional)</label>
+              <div class="section-row">
+                <input type="text" id="sectionStart" class="path-input section-input" placeholder="00:00:00" aria-label="Início do corte" />
+                <span class="section-sep">até</span>
+                <input type="text" id="sectionEnd" class="path-input section-input" placeholder="00:01:30" aria-label="Fim do corte" />
+              </div>
+              <p id="sectionError" class="field-error" role="alert"></p>
+            </div>
+
+            <!-- Legendas -->
+            <div class="field-group">
+              <label class="field-label checkbox-label">
+                <input type="checkbox" id="subLangsCheckbox" class="field-checkbox" />
+                Baixar legendas
+              </label>
+              <input type="text" id="subLangsInput" class="path-input hidden" placeholder="Idiomas (ex: en,pt)" aria-label="Idiomas das legendas" />
+            </div>
+
+            <!-- Argumentos extras (allowlist validada no backend) -->
+            <div class="field-group">
+              <label for="extraArgsInput" class="field-label">Argumentos extras (yt-dlp)</label>
+              <input type="text" id="extraArgsInput" class="path-input" placeholder="ex: --embed-thumbnail --no-playlist" aria-label="Argumentos extras" />
+            </div>
+
+            <div class="field-divider" role="separator" aria-hidden="true"></div>
+
             <!-- Destination path -->
             <div class="field-group">
               <label for="downloadPath" class="field-label">
@@ -164,58 +223,58 @@
               </svg>
               Iniciar Download
             </button>
+          </div>
 
-            <!-- ── Progresso inline ── -->
-            <div id="progressRegion" class="progress-region hidden" aria-live="polite">
-              <div class="progress-header-row">
-                <div class="progress-orb" aria-hidden="true">
-                  <div class="orb-ring-outer"></div>
-                  <div class="orb-core">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                      <polyline points="7 10 12 15 17 10" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                      <line x1="12" y1="15" x2="12" y2="3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-                    </svg>
-                  </div>
+          <!-- ── Progresso — compartilhado pelos dois modos ── -->
+          <div id="progressRegion" class="progress-region hidden" aria-live="polite">
+            <div class="progress-header-row">
+              <div class="progress-orb" aria-hidden="true">
+                <div class="orb-ring-outer"></div>
+                <div class="orb-core">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    <polyline points="7 10 12 15 17 10" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    <line x1="12" y1="15" x2="12" y2="3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                  </svg>
                 </div>
-                <div class="progress-labels">
-                  <p id="progressText" class="progress-status-text">Iniciando download...</p>
-                  <p id="progressStats" class="progress-stats-text"></p>
-                </div>
-                <div id="progressPercent" class="progress-pct">0%</div>
               </div>
-
-              <div class="progress-track" role="progressbar" aria-valuemin="0" aria-valuemax="100">
-                <div id="progressFill" class="progress-fill"></div>
+              <div class="progress-labels">
+                <p id="progressText" class="progress-status-text">Iniciando download...</p>
+                <p id="progressStats" class="progress-stats-text"></p>
               </div>
-
-              <button id="cancelBtn" class="cancel-btn">Cancelar download</button>
+              <div id="progressPercent" class="progress-pct">0%</div>
             </div>
 
-            <!-- ── Banner de resultado ── -->
-            <div id="outcomeBanner" class="outcome-banner hidden" role="status">
-              <div class="banner-icon" aria-hidden="true">
-                <svg class="banner-icon-success" width="16" height="16" viewBox="0 0 24 24" fill="none">
-                  <path d="M20 6L9 17l-5-5" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+            <div class="progress-track" role="progressbar" aria-valuemin="0" aria-valuemax="100">
+              <div id="progressFill" class="progress-fill"></div>
+            </div>
+
+            <button id="cancelBtn" class="cancel-btn">Cancelar download</button>
+          </div>
+
+          <!-- ── Banner de resultado — compartilhado pelos dois modos ── -->
+          <div id="outcomeBanner" class="outcome-banner hidden" role="status">
+            <div class="banner-icon" aria-hidden="true">
+              <svg class="banner-icon-success" width="16" height="16" viewBox="0 0 24 24" fill="none">
+                <path d="M20 6L9 17l-5-5" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+              <svg class="banner-icon-error" width="15" height="15" viewBox="0 0 24 24" fill="none">
+                <line x1="18" y1="6" x2="6" y2="18" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/>
+                <line x1="6" y1="6" x2="18" y2="18" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/>
+              </svg>
+            </div>
+            <div class="banner-body">
+              <p id="bannerTitle" class="banner-title"></p>
+              <p id="bannerText" class="banner-text"></p>
+            </div>
+            <div class="banner-actions">
+              <button id="openFolderBtn" class="banner-btn success-btn hidden">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
                 </svg>
-                <svg class="banner-icon-error" width="15" height="15" viewBox="0 0 24 24" fill="none">
-                  <line x1="18" y1="6" x2="6" y2="18" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/>
-                  <line x1="6" y1="6" x2="18" y2="18" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/>
-                </svg>
-              </div>
-              <div class="banner-body">
-                <p id="bannerTitle" class="banner-title"></p>
-                <p id="bannerText" class="banner-text"></p>
-              </div>
-              <div class="banner-actions">
-                <button id="openFolderBtn" class="banner-btn success-btn hidden">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                    <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                  </svg>
-                  Abrir pasta
-                </button>
-                <button id="retryBtn" class="banner-btn amber-btn hidden">Tentar novamente</button>
-              </div>
+                Abrir pasta
+              </button>
+              <button id="retryBtn" class="banner-btn amber-btn hidden">Tentar novamente</button>
             </div>
           </div>
 

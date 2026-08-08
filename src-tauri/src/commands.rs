@@ -1,4 +1,4 @@
-use crate::download_manager::{DownloadManager, DownloadResult, FormatsResult};
+use crate::download_manager::{DownloadManager, DownloadOptions, DownloadResult, FormatsResult};
 use serde::Serialize;
 use tauri::{AppHandle, Manager, State};
 use tauri_plugin_dialog::DialogExt;
@@ -45,6 +45,7 @@ pub async fn get_formats(
         .map_err(|e| e.to_string())?
 }
 
+#[allow(clippy::too_many_arguments)]
 #[tauri::command]
 pub async fn start_download(
     app: AppHandle,
@@ -52,13 +53,22 @@ pub async fn start_download(
     url: String,
     format: String,
     output_path: String,
+    section_start: Option<String>,
+    section_end: Option<String>,
+    sub_langs: Option<String>,
+    extra_args: Option<String>,
 ) -> Result<DownloadResult, String> {
     if url.trim().is_empty() || format.trim().is_empty() || output_path.trim().is_empty() {
         return Err("URL, formato ou caminho de saída inválido".to_string());
     }
+    let options = DownloadOptions {
+        section: section_start.zip(section_end),
+        sub_langs,
+        extra_args,
+    };
     let manager = manager.inner().clone();
     tauri::async_runtime::spawn_blocking(move || {
-        manager.download(&app, &url, &format, Some(output_path))
+        manager.download(&app, &url, &format, Some(output_path), options)
     })
     .await
     .map_err(|e| e.to_string())?

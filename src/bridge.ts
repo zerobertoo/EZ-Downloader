@@ -39,6 +39,18 @@ export interface DownloadProgress {
   eta: string | null;
 }
 
+export interface StartDownloadOptions {
+  sectionStart?: string;
+  sectionEnd?: string;
+  subLangs?: string;
+  extraArgs?: string;
+}
+
+export interface DebugLine {
+  stream: "stdout" | "stderr";
+  text: string;
+}
+
 export const bridge = {
   getVersion: (): Promise<string> => invoke("get_version"),
 
@@ -46,8 +58,21 @@ export const bridge = {
 
   getFormats: (url: string): Promise<FormatsResult> => invoke("get_formats", { url }),
 
-  startDownload: (url: string, format: string, outputPath: string): Promise<DownloadResult> =>
-    invoke("start_download", { url, format, outputPath }),
+  startDownload: (
+    url: string,
+    format: string,
+    outputPath: string,
+    options: StartDownloadOptions = {}
+  ): Promise<DownloadResult> =>
+    invoke("start_download", {
+      url,
+      format,
+      outputPath,
+      sectionStart: options.sectionStart ?? null,
+      sectionEnd: options.sectionEnd ?? null,
+      subLangs: options.subLangs ?? null,
+      extraArgs: options.extraArgs ?? null,
+    }),
 
   selectDownloadPath: (): Promise<string | null> => invoke("select_download_path"),
 
@@ -59,4 +84,10 @@ export const bridge = {
 
   onDownloadProgress: (callback: (progress: DownloadProgress) => void): Promise<UnlistenFn> =>
     listen<DownloadProgress>("download-progress", (event) => callback(event.payload)),
+
+  onDebugCommand: (callback: (command: string) => void): Promise<UnlistenFn> =>
+    listen<string>("download-debug-command", (event) => callback(event.payload)),
+
+  onDebugLine: (callback: (line: DebugLine) => void): Promise<UnlistenFn> =>
+    listen<DebugLine>("download-debug-line", (event) => callback(event.payload)),
 };

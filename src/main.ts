@@ -1,7 +1,9 @@
-import { bridge, type FormatOption, type DownloadProgress } from "./bridge";
+import { bridge, type FormatOption, type DownloadProgress, type DebugLine } from "./bridge";
 import { THEMES, initTheme, setTheme, currentThemeId } from "./theme";
+import { initMode, setMode, currentMode, type AppMode } from "./mode";
 
 initTheme();
+initMode();
 
 const UI_STRINGS = {
   errorNoUrl: "Por favor, insira uma URL",
@@ -9,6 +11,7 @@ const UI_STRINGS = {
   errorNoFormats: "Nenhum formato disponível para este vídeo",
   errorFetchFormats: "Erro ao buscar formatos:",
   errorNoPath: "Por favor, selecione um diretório de download",
+  errorIncompleteSection: "Preencha início e fim do corte, ou deixe os dois em branco",
   errorSelectDir: "Erro ao selecionar diretório",
   errorOpenFolder: "Erro ao abrir pasta de downloads",
   errorCancel: "Erro ao cancelar download",
@@ -34,6 +37,8 @@ interface VideoMetadata {
  */
 type Phase = "idle" | "fetching" | "ready" | "downloading" | "done" | "failed";
 
+const DEBUG_LOG_MAX_LINES = 500;
+
 const state = {
   phase: "idle" as Phase,
   currentUrl: "",
@@ -41,6 +46,9 @@ const state = {
   downloadPath: null as string | null,
   formats: [] as FormatOption[],
   videoMetadata: { title: null, thumbnail: null, uploader: null } as VideoMetadata,
+  quickFormat: "mp4" as "mp4" | "mp3",
+  nerdMode: false,
+  debugLines: [] as { stream: "stdout" | "stderr"; text: string }[],
 };
 
 const elements = {
@@ -74,6 +82,21 @@ const elements = {
   version: document.getElementById("version"),
   themeToggleBtn: document.getElementById("themeToggleBtn") as HTMLButtonElement | null,
   themePopover: document.getElementById("themePopover"),
+  modeToggleBtn: document.getElementById("modeToggleBtn") as HTMLButtonElement | null,
+  modeToggleLabel: document.getElementById("modeToggleLabel"),
+  quickMp4Btn: document.getElementById("quickMp4Btn") as HTMLButtonElement | null,
+  quickMp3Btn: document.getElementById("quickMp3Btn") as HTMLButtonElement | null,
+  quickDownloadBtn: document.getElementById("quickDownloadBtn") as HTMLButtonElement | null,
+  sectionStart: document.getElementById("sectionStart") as HTMLInputElement | null,
+  sectionEnd: document.getElementById("sectionEnd") as HTMLInputElement | null,
+  sectionError: document.getElementById("sectionError"),
+  subLangsCheckbox: document.getElementById("subLangsCheckbox") as HTMLInputElement | null,
+  subLangsInput: document.getElementById("subLangsInput") as HTMLInputElement | null,
+  extraArgsInput: document.getElementById("extraArgsInput") as HTMLInputElement | null,
+  nerdModeBtn: document.getElementById("nerdModeBtn") as HTMLButtonElement | null,
+  debugPanel: document.getElementById("debugPanel"),
+  debugCommand: document.getElementById("debugCommand"),
+  debugLog: document.getElementById("debugLog"),
 };
 
 function errorMessage(error: unknown): string {
@@ -124,6 +147,95 @@ function closeThemePopover() {
   elements.themeToggleBtn?.setAttribute("aria-expanded", "false");
 }
 
+/* ════════════════════════════════════════════════════════════════
+   MODO BÁSICO / AVANÇADO
+   ════════════════════════════════════════════════════════════════ */
+
+function renderModeLabel() {
+  if (elements.modeToggleLabel) {
+    elements.modeToggleLabel.textContent = currentMode() === "basic" ? "Básico" : "Avançado";
+  }
+}
+
+/** Troca de modo descarta o vídeo/formato carregados — evita estado híbrido. */
+function handleToggleMode() {
+  const next: AppMode = currentMode() === "basic" ? "advanced" : "basic";
+  setMode(next);
+  renderModeLabel();
+
+  state.formats = [];
+  state.selectedFormat = null;
+  state.videoMetadata = { title: null, thumbnail: null, uploader: null };
+  state.currentUrl = "";
+  showBanner("", "");
+  setPhase("idle");
+
+  // Campos exclusivos do Avançado não sobrevivem à troca de modo — senão
+  // voltam preenchidos com valor antigo num próximo download sem o usuário notar.
+  if (elements.sectionStart) elements.sectionStart.value = "";
+  if (elements.sectionEnd) elements.sectionEnd.value = "";
+  if (elements.subLangsCheckbox) elements.subLangsCheckbox.checked = false;
+  if (elements.subLangsInput) elements.subLangsInput.value = "";
+  toggle(elements.subLangsInput, false);
+  if (elements.extraArgsInput) elements.extraArgsInput.value = "";
+}
+
+function setQuickFormat(format: "mp4" | "mp3") {
+  state.quickFormat = format;
+  const mp4Active = format === "mp4";
+  elements.quickMp4Btn?.classList.toggle("is-active", mp4Active);
+  elements.quickMp4Btn?.setAttribute("aria-checked", String(mp4Active));
+  elements.quickMp3Btn?.classList.toggle("is-active", !mp4Active);
+  elements.quickMp3Btn?.setAttribute("aria-checked", String(!mp4Active));
+}
+
+/* ════════════════════════════════════════════════════════════════
+   MODO NERD — comando montado + log ao vivo
+   ════════════════════════════════════════════════════════════════ */
+
+function toggleNerdMode() {
+  state.nerdMode = !state.nerdMode;
+  elements.nerdModeBtn?.setAttribute("aria-pressed", String(state.nerdMode));
+  toggle(elements.debugPanel, state.nerdMode);
+  if (state.nerdMode) replayDebugLog();
+}
+
+function replayDebugLog() {
+  if (!elements.debugLog) return;
+  elements.debugLog.innerHTML = "";
+  for (const line of state.debugLines) {
+    const el = document.createElement("div");
+    el.className = "debug-log-line" + (line.stream === "stderr" ? " is-stderr" : "");
+    el.textContent = line.text;
+    elements.debugLog.appendChild(el);
+  }
+  elements.debugLog.scrollTop = elements.debugLog.scrollHeight;
+}
+
+function clearDebugLog() {
+  state.debugLines = [];
+  if (elements.debugCommand) elements.debugCommand.textContent = "";
+  if (elements.debugLog) elements.debugLog.innerHTML = "";
+}
+
+function showDebugCommand(command: string) {
+  if (elements.debugCommand) elements.debugCommand.textContent = command;
+}
+
+function appendDebugLine(line: DebugLine) {
+  state.debugLines.push(line);
+  if (state.debugLines.length > DEBUG_LOG_MAX_LINES) {
+    state.debugLines.splice(0, state.debugLines.length - DEBUG_LOG_MAX_LINES);
+  }
+  if (!state.nerdMode || !elements.debugLog) return;
+
+  const el = document.createElement("div");
+  el.className = "debug-log-line" + (line.stream === "stderr" ? " is-stderr" : "");
+  el.textContent = line.text;
+  elements.debugLog.appendChild(el);
+  elements.debugLog.scrollTop = elements.debugLog.scrollHeight;
+}
+
 document.addEventListener("DOMContentLoaded", async () => {
   elements.fetchFormatsBtn?.addEventListener("click", handleFetchFormats);
   elements.formatSelect?.addEventListener("change", handleFormatChange);
@@ -136,6 +248,16 @@ document.addEventListener("DOMContentLoaded", async () => {
     e.stopPropagation();
     toggleThemePopover();
   });
+
+  elements.modeToggleBtn?.addEventListener("click", handleToggleMode);
+  elements.quickMp4Btn?.addEventListener("click", () => setQuickFormat("mp4"));
+  elements.quickMp3Btn?.addEventListener("click", () => setQuickFormat("mp3"));
+  elements.quickDownloadBtn?.addEventListener("click", handleQuickDownload);
+  elements.subLangsCheckbox?.addEventListener("change", () => {
+    toggle(elements.subLangsInput, elements.subLangsCheckbox?.checked ?? false);
+  });
+  elements.nerdModeBtn?.addEventListener("click", toggleNerdMode);
+  renderModeLabel();
   document.addEventListener("click", (e) => {
     const popover = elements.themePopover;
     if (popover && !popover.classList.contains("hidden") && !popover.contains(e.target as Node) && e.target !== elements.themeToggleBtn) {
@@ -168,6 +290,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
 
     await bridge.onDownloadProgress((progress) => updateProgress(progress));
+    await bridge.onDebugCommand((command) => showDebugCommand(command));
+    await bridge.onDebugLine((line) => appendDebugLine(line));
   } catch (error) {
     console.error("Erro ao inicializar:", error);
     setFieldError(elements.urlError, UI_STRINGS.errorInit);
@@ -209,6 +333,7 @@ function render() {
   if (elements.fetchFormatsBtn) elements.fetchFormatsBtn.disabled = downloading || phase === "fetching";
   if (elements.formatSelect) elements.formatSelect.disabled = downloading;
   if (elements.selectPathBtn) elements.selectPathBtn.disabled = downloading;
+  if (elements.quickDownloadBtn) elements.quickDownloadBtn.disabled = downloading;
 
   // Se o campo de URL não bate mais com o vídeo carregado, baixar seria baixar
   // o vídeo antigo — bloqueia e explica.
@@ -254,6 +379,7 @@ function clearFieldError(element: Element | null) {
 function clearFieldErrors() {
   clearFieldError(elements.urlError);
   clearFieldError(elements.pathError);
+  clearFieldError(elements.sectionError);
 }
 
 function showBanner(title: string, message: string) {
@@ -439,16 +565,62 @@ async function handleDownload() {
     return;
   }
 
+  const sectionStart = elements.sectionStart?.value.trim() || undefined;
+  const sectionEnd = elements.sectionEnd?.value.trim() || undefined;
+  if (Boolean(sectionStart) !== Boolean(sectionEnd)) {
+    setFieldError(elements.sectionError, UI_STRINGS.errorIncompleteSection);
+    return;
+  }
+
+  const subLangs = elements.subLangsCheckbox?.checked
+    ? elements.subLangsInput?.value.trim() || undefined
+    : undefined;
+
+  await performDownload(state.selectedFormat.id, {
+    sectionStart,
+    sectionEnd,
+    subLangs,
+    extraArgs: elements.extraArgsInput?.value.trim() || undefined,
+  });
+}
+
+/** Modo Rápido: sem metadados prévios, dispara direto na melhor qualidade. */
+async function handleQuickDownload() {
+  if (state.phase === "downloading") return;
+
+  const url = urlFieldValue();
+  clearFieldErrors();
+
+  if (!url) {
+    setFieldError(elements.urlError, UI_STRINGS.errorNoUrl);
+    return;
+  }
+  if (!isValidUrl(url)) {
+    setFieldError(elements.urlError, UI_STRINGS.errorInvalidUrl);
+    return;
+  }
+
+  state.currentUrl = url;
+  await performDownload(state.quickFormat === "mp3" ? "quick-mp3" : "quick-mp4", {});
+}
+
+/** Lógica de download comum aos dois modos — fase, progresso e banner. */
+async function performDownload(
+  format: string,
+  options: { sectionStart?: string; sectionEnd?: string; subLangs?: string; extraArgs?: string }
+) {
+  if (!state.downloadPath) {
+    setFieldError(elements.pathError, UI_STRINGS.errorNoPath);
+    return;
+  }
+
   clearFieldErrors();
   setPhase("downloading");
   resetProgress();
+  clearDebugLog();
 
   try {
-    const result = await bridge.startDownload(
-      state.currentUrl,
-      state.selectedFormat.id,
-      state.downloadPath
-    );
+    const result = await bridge.startDownload(state.currentUrl, format, state.downloadPath, options);
 
     await new Promise((resolve) => setTimeout(resolve, 500));
     updateProgress(100);

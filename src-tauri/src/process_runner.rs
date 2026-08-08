@@ -26,14 +26,16 @@ impl ProcessHandle {
 /// Spawns `bin` with `args`, streaming stdout line-by-line to `on_stdout_line`.
 /// Returns a handle for cancellation plus a join handle that resolves once the
 /// process exits (or is killed by `timeout`).
-pub fn spawn_process<F>(
+pub fn spawn_process<F, G>(
     bin: &str,
     args: &[String],
     timeout: Option<Duration>,
     mut on_stdout_line: F,
+    mut on_stderr_line: G,
 ) -> Result<(ProcessHandle, JoinHandle<Result<ProcessOutput, String>>), String>
 where
     F: FnMut(&str) + Send + 'static,
+    G: FnMut(&str) + Send + 'static,
 {
     let mut command = Command::new(bin);
     command.args(args).stdout(Stdio::piped()).stderr(Stdio::piped());
@@ -74,6 +76,7 @@ where
             for line in BufReader::new(stderr).lines().map_while(Result::ok) {
                 buf.push_str(&line);
                 buf.push('\n');
+                on_stderr_line(&line);
             }
             buf
         });
@@ -120,6 +123,7 @@ mod tests {
             &["-c".to_string(), "echo hello; echo world".to_string()],
             None,
             |_| {},
+            |_| {},
         )
         .unwrap();
         let output = join.join().unwrap().unwrap();
@@ -135,6 +139,7 @@ mod tests {
             &["-c".to_string(), "echo oops 1>&2; exit 3".to_string()],
             None,
             |_| {},
+            |_| {},
         )
         .unwrap();
         let output = join.join().unwrap().unwrap();
@@ -149,6 +154,7 @@ mod tests {
             &["-c".to_string(), "sleep 5".to_string()],
             Some(Duration::from_millis(100)),
             |_| {},
+            |_| {},
         )
         .unwrap();
         let result = join.join().unwrap();
@@ -162,10 +168,27 @@ mod tests {
             &["-c".to_string(), "sleep 5".to_string()],
             None,
             |_| {},
+            |_| {},
         )
         .unwrap();
         handle.kill();
         let output = join.join().unwrap().unwrap();
         assert_ne!(output.code, 0);
+    }
+
+    #[test]
+    fn streams_stderr_lines_live() {
+        let lines = Arc::new(Mutex::new(Vec::new()));
+        let lines_clone = Arc::clone(&lines);
+        let (_, join) = spawn_process(
+            "sh",
+            &["-c".to_string(), "echo oops 1>&2; echo again 1>&2".to_string()],
+            None,
+            |_| {},
+            move |line: &str| lines_clone.lock().unwrap().push(line.to_string()),
+        )
+        .unwrap();
+        join.join().unwrap().unwrap();
+        assert_eq!(*lines.lock().unwrap(), vec!["oops", "again"]);
     }
 }
