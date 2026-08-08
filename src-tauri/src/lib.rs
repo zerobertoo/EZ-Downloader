@@ -10,6 +10,74 @@ use download_manager::DownloadManager;
 use tauri::menu::{Menu, MenuItem, PredefinedMenuItem, Submenu};
 use tauri::{AppHandle, Manager};
 use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogKind};
+use tauri_plugin_updater::UpdaterExt;
+
+async fn check_for_update(app: AppHandle, silent: bool) {
+    let updater = match app.updater() {
+        Ok(updater) => updater,
+        Err(err) => {
+            if !silent {
+                app.dialog()
+                    .message(format!("Erro ao verificar atualizações: {err}"))
+                    .title("Erro")
+                    .kind(MessageDialogKind::Error)
+                    .blocking_show();
+            }
+            return;
+        }
+    };
+
+    let update = match updater.check().await {
+        Ok(update) => update,
+        Err(err) => {
+            if !silent {
+                app.dialog()
+                    .message(format!("Erro ao verificar atualizações: {err}"))
+                    .title("Erro")
+                    .kind(MessageDialogKind::Error)
+                    .blocking_show();
+            }
+            return;
+        }
+    };
+
+    let Some(update) = update else {
+        if !silent {
+            app.dialog()
+                .message("Você já está usando a versão mais recente.")
+                .title("Sem atualizações")
+                .kind(MessageDialogKind::Info)
+                .blocking_show();
+        }
+        return;
+    };
+
+    let should_install = app
+        .dialog()
+        .message(format!(
+            "Nova versão disponível: {}\n\nDeseja baixar e instalar agora?",
+            update.version
+        ))
+        .title("Atualização disponível")
+        .kind(MessageDialogKind::Info)
+        .buttons(MessageDialogButtons::YesNo)
+        .blocking_show();
+
+    if !should_install {
+        return;
+    }
+
+    if let Err(err) = update.download_and_install(|_, _| {}, || {}).await {
+        app.dialog()
+            .message(format!("Falha ao instalar atualização: {err}"))
+            .title("Erro")
+            .kind(MessageDialogKind::Error)
+            .blocking_show();
+        return;
+    }
+
+    app.request_restart();
+}
 
 fn build_menu(app: &AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
     let file_menu = Submenu::with_items(
@@ -98,6 +166,8 @@ pub fn run() {
             let menu = build_menu(&handle)?;
             app.set_menu(menu)?;
 
+            tauri::async_runtime::spawn(check_for_update(handle.clone(), true));
+
             let about_handle = handle.clone();
             app.on_menu_event(move |_app, event| match event.id().as_ref() {
                 "quit" => about_handle.exit(0),
@@ -113,12 +183,8 @@ pub fn run() {
                         .blocking_show();
                 }
                 "check-updates" => {
-                    about_handle
-                        .dialog()
-                        .message("As atualizações são verificadas automaticamente em segundo plano.")
-                        .title("Atualização Automática")
-                        .kind(MessageDialogKind::Info)
-                        .blocking_show();
+                    let handle = about_handle.clone();
+                    tauri::async_runtime::spawn(check_for_update(handle, false));
                 }
                 _ => {}
             });
