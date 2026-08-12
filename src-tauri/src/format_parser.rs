@@ -347,9 +347,8 @@ mod tests {
 
     #[test]
     fn classifies_rate_limit() {
-        assert!(
-            classify_ytdlp_error("HTTP Error 429: Too Many Requests").contains("Muitas requisições")
-        );
+        assert!(classify_ytdlp_error("HTTP Error 429: Too Many Requests")
+            .contains("Muitas requisições"));
     }
 
     #[test]

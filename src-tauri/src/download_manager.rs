@@ -149,7 +149,11 @@ fn quick_download_args(mode: &str) -> Vec<String> {
 }
 
 impl DownloadManager {
-    pub fn new(ytdlp_bin: String, ffmpeg_bin: Option<String>, default_download_path: PathBuf) -> Self {
+    pub fn new(
+        ytdlp_bin: String,
+        ffmpeg_bin: Option<String>,
+        default_download_path: PathBuf,
+    ) -> Self {
         std::fs::create_dir_all(&default_download_path).ok();
         Self {
             ytdlp_bin: Arc::new(Mutex::new(ytdlp_bin)),
@@ -174,7 +178,13 @@ impl DownloadManager {
             url.to_string(),
         ];
         let ytdlp_bin = self.current_ytdlp_bin();
-        let (_, join) = spawn_process(&ytdlp_bin, &args, Some(Duration::from_secs(30)), |_| {}, |_| {})?;
+        let (_, join) = spawn_process(
+            &ytdlp_bin,
+            &args,
+            Some(Duration::from_secs(30)),
+            |_| {},
+            |_| {},
+        )?;
         let output = join
             .join()
             .map_err(|_| "Erro interno ao aguardar processo".to_string())??;
@@ -272,7 +282,10 @@ impl DownloadManager {
         let on_stdout = move |line: &str| {
             let _ = debug_stdout_handle.emit(
                 "download-debug-line",
-                DebugLine { stream: "stdout", text: line.to_string() },
+                DebugLine {
+                    stream: "stdout",
+                    text: line.to_string(),
+                },
             );
             let Some(caps) = progress_re.captures(line) else {
                 return;
@@ -282,7 +295,9 @@ impl DownloadManager {
                 .and_then(|m| m.as_str().parse().ok())
                 .unwrap_or(0.0);
             let now = Instant::now();
-            if now.duration_since(last_progress).as_millis() > PROGRESS_THROTTLE_MS || percent == 100.0 {
+            if now.duration_since(last_progress).as_millis() > PROGRESS_THROTTLE_MS
+                || percent == 100.0
+            {
                 let payload = DownloadProgress {
                     percent,
                     speed: caps.get(2).map(|m| m.as_str().to_string()),
@@ -295,7 +310,10 @@ impl DownloadManager {
         let on_stderr = move |line: &str| {
             let _ = debug_stderr_handle.emit(
                 "download-debug-line",
-                DebugLine { stream: "stderr", text: line.to_string() },
+                DebugLine {
+                    stream: "stderr",
+                    text: line.to_string(),
+                },
             );
         };
 
@@ -335,14 +353,20 @@ mod tests {
 
     #[test]
     fn extra_args_accepts_allowlisted_boolean_flag() {
-        assert_eq!(validate_extra_args("--write-subs"), Ok(vec!["--write-subs".to_string()]));
+        assert_eq!(
+            validate_extra_args("--write-subs"),
+            Ok(vec!["--write-subs".to_string()])
+        );
     }
 
     #[test]
     fn extra_args_accepts_allowlisted_value_flag_with_value() {
         assert_eq!(
             validate_extra_args("--cookies-from-browser chrome"),
-            Ok(vec!["--cookies-from-browser".to_string(), "chrome".to_string()])
+            Ok(vec![
+                "--cookies-from-browser".to_string(),
+                "chrome".to_string()
+            ])
         );
     }
 
@@ -418,14 +442,20 @@ mod tests {
     #[test]
     fn format_command_leaves_plain_parts_unquoted() {
         let args = vec!["-f".to_string(), "bestaudio".to_string()];
-        assert_eq!(format_command_for_display("yt-dlp", &args), "yt-dlp -f bestaudio");
+        assert_eq!(
+            format_command_for_display("yt-dlp", &args),
+            "yt-dlp -f bestaudio"
+        );
     }
 
     #[test]
     fn section_arg_formats_download_sections_flag() {
         assert_eq!(
             section_arg("00:01:00", "00:02:30"),
-            vec!["--download-sections".to_string(), "*00:01:00-00:02:30".to_string()]
+            vec![
+                "--download-sections".to_string(),
+                "*00:01:00-00:02:30".to_string()
+            ]
         );
     }
 

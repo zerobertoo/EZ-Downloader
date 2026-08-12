@@ -38,7 +38,10 @@ where
     G: FnMut(&str) + Send + 'static,
 {
     let mut command = Command::new(bin);
-    command.args(args).stdout(Stdio::piped()).stderr(Stdio::piped());
+    command
+        .args(args)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
     #[cfg(windows)]
     {
         use std::os::windows::process::CommandExt;
@@ -182,7 +185,10 @@ mod tests {
         let lines_clone = Arc::clone(&lines);
         let (_, join) = spawn_process(
             "sh",
-            &["-c".to_string(), "echo oops 1>&2; echo again 1>&2".to_string()],
+            &[
+                "-c".to_string(),
+                "echo oops 1>&2; echo again 1>&2".to_string(),
+            ],
             None,
             |_| {},
             move |line: &str| lines_clone.lock().unwrap().push(line.to_string()),
