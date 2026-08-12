@@ -46,7 +46,9 @@ pub struct DownloadOptions {
 
 #[derive(Clone)]
 pub struct DownloadManager {
-    ytdlp_bin: String,
+    // Compartilhado via Arc: o updater do yt-dlp troca o binário em runtime e
+    // clones anteriores do manager (State do Tauri) precisam enxergar a troca.
+    ytdlp_bin: Arc<Mutex<String>>,
     ffmpeg_bin: Option<String>,
     current_process: Arc<Mutex<Option<ProcessHandle>>>,
     default_download_path: PathBuf,
@@ -150,11 +152,19 @@ impl DownloadManager {
     pub fn new(ytdlp_bin: String, ffmpeg_bin: Option<String>, default_download_path: PathBuf) -> Self {
         std::fs::create_dir_all(&default_download_path).ok();
         Self {
-            ytdlp_bin,
+            ytdlp_bin: Arc::new(Mutex::new(ytdlp_bin)),
             ffmpeg_bin,
             current_process: Arc::new(Mutex::new(None)),
             default_download_path,
         }
+    }
+
+    fn current_ytdlp_bin(&self) -> String {
+        self.ytdlp_bin.lock().unwrap().clone()
+    }
+
+    pub fn set_ytdlp_bin(&self, bin: String) {
+        *self.ytdlp_bin.lock().unwrap() = bin;
     }
 
     pub fn get_available_formats(&self, url: &str) -> Result<FormatsResult, String> {
@@ -163,7 +173,8 @@ impl DownloadManager {
             "--no-warnings".to_string(),
             url.to_string(),
         ];
-        let (_, join) = spawn_process(&self.ytdlp_bin, &args, Some(Duration::from_secs(30)), |_| {}, |_| {})?;
+        let ytdlp_bin = self.current_ytdlp_bin();
+        let (_, join) = spawn_process(&ytdlp_bin, &args, Some(Duration::from_secs(30)), |_| {}, |_| {})?;
         let output = join
             .join()
             .map_err(|_| "Erro interno ao aguardar processo".to_string())??;
@@ -179,7 +190,9 @@ impl DownloadManager {
                 uploader: info.uploader.or(info.channel),
             })
         } else {
-            Err(classify_ytdlp_error(&output.stderr))
+            let message = classify_ytdlp_error(&output.stderr);
+            log::warn!("Busca de formatos falhou para {url}: {message}");
+            Err(message)
         }
     }
 
@@ -235,9 +248,15 @@ impl DownloadManager {
         args.push("--no-warnings".to_string());
         args.push(url.to_string());
 
+        let ytdlp_bin = self.current_ytdlp_bin();
+        log::info!(
+            "Iniciando download: url={url} formato={format} destino={}",
+            download_dir.display()
+        );
+
         let _ = app.emit(
             "download-debug-command",
-            format_command_for_display(&self.ytdlp_bin, &args),
+            format_command_for_display(&ytdlp_bin, &args),
         );
 
         let progress_re =
@@ -280,7 +299,7 @@ impl DownloadManager {
             );
         };
 
-        let (handle, join) = spawn_process(&self.ytdlp_bin, &args, None, on_stdout, on_stderr)?;
+        let (handle, join) = spawn_process(&ytdlp_bin, &args, None, on_stdout, on_stderr)?;
         *self.current_process.lock().unwrap() = Some(handle);
 
         let result = join
@@ -290,17 +309,21 @@ impl DownloadManager {
 
         let output = result??;
         if output.code == 0 {
+            log::info!("Download concluído: {}", download_dir.display());
             Ok(DownloadResult {
                 path: download_dir.to_string_lossy().to_string(),
                 message: "Download concluído com sucesso".to_string(),
             })
         } else {
-            Err(classify_ytdlp_error(&output.stderr))
+            let message = classify_ytdlp_error(&output.stderr);
+            log::error!("Download falhou para {url}: {message}");
+            Err(message)
         }
     }
 
     pub fn cancel_download(&self) {
         if let Some(handle) = self.current_process.lock().unwrap().take() {
+            log::info!("Download cancelado pelo usuário");
             handle.kill();
         }
     }

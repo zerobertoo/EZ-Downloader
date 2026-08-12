@@ -31,7 +31,21 @@ fn resource_bin_path(app: &AppHandle, base: &str) -> String {
     path.to_string_lossy().to_string()
 }
 
+/// Cópia do yt-dlp baixada pelo updater em runtime, no diretório de dados do
+/// app (gravável — o resource dir de um app instalado geralmente não é).
+pub fn updated_ytdlp_path(app: &AppHandle) -> Option<PathBuf> {
+    let dir = app.path().app_data_dir().ok()?.join("bin");
+    Some(dir.join(binary_name("yt-dlp")))
+}
+
 pub fn get_ytdlp_bin(app: &AppHandle) -> String {
+    // Uma cópia atualizada pelo usuário tem prioridade sobre o binário
+    // embutido no build — é o que permite atualizar o yt-dlp sem release nova.
+    if let Some(path) = updated_ytdlp_path(app) {
+        if path.exists() {
+            return path.to_string_lossy().to_string();
+        }
+    }
     if cfg!(debug_assertions) {
         return "yt-dlp".to_string();
     }

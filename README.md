@@ -94,21 +94,26 @@ Tauri: backend Rust (processo nativo) + frontend TypeScript rodando na webview d
 
 ```
 src-tauri/src/
-├── lib.rs                 # Bootstrap do app, janela, menu, plugins
+├── lib.rs                 # Bootstrap do app, janela, menu, plugins (updater, logging)
 ├── commands.rs             # Comandos invocáveis do frontend (get_formats, start_download, ...)
 ├── download_manager.rs     # Spawna yt-dlp, stream de progresso, cancelamento
 ├── format_parser.rs        # Deduplicação de formatos e mapeamento de erros
 ├── process_runner.rs       # Wrapper de spawn com timeout e streaming
 ├── dependency_checker.rs   # Checagem de yt-dlp/ffmpeg no boot
-└── paths.rs                # Resolução dos binários empacotados
+├── paths.rs                # Resolução dos binários empacotados (prefere cópia atualizada)
+└── ytdlp_updater.rs        # Atualiza o yt-dlp embutido em runtime (menu Ajuda → Atualizar yt-dlp)
 
 src/
 ├── main.ts                # Lógica de UI e máquina de estados (showSection)
 ├── bridge.ts               # Wrapper tipado sobre @tauri-apps/api (invoke/listen)
+├── mode.ts                 # Modo Básico/Avançado (persistido em localStorage)
+├── theme.ts                # Temas de cor (persistidos em localStorage)
 └── styles.css               # Design system Obsidian & Ember (CSS custom properties)
 
 index.html                  # Markup com todos os IDs usados por main.ts
 ```
+
+Logs de runtime ficam no diretório de logs do app (via `tauri-plugin-log`): `~/.local/share/com.ezdownloader.app/logs/` no Linux, `%APPDATA%/com.ezdownloader.app/logs/` no Windows e `~/Library/Logs/com.ezdownloader.app/` no macOS.
 
 O `yt-dlp` e o `ffmpeg` ficam em `resources/bin/<platform>/`, baixados por `scripts/download-yt-dlp.cjs` e embutidos como resources do Tauri (ver `bundle.resources` em `src-tauri/tauri.conf.json`).
 

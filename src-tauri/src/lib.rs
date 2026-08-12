@@ -4,13 +4,55 @@ mod download_manager;
 mod format_parser;
 mod paths;
 mod process_runner;
+mod ytdlp_updater;
 
 use dependency_checker::check_dependencies;
 use download_manager::DownloadManager;
 use tauri::menu::{Menu, MenuItem, PredefinedMenuItem, Submenu};
 use tauri::{AppHandle, Manager};
 use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogKind};
+use tauri_plugin_log::{Target, TargetKind};
 use tauri_plugin_updater::UpdaterExt;
+
+/// Atualiza o yt-dlp embutido baixando o binário mais recente para o
+/// diretório de dados do app — sem precisar de uma release nova do app.
+async fn update_ytdlp_flow(app: AppHandle) {
+    let result = tauri::async_runtime::spawn_blocking({
+        let app = app.clone();
+        move || ytdlp_updater::update(&app)
+    })
+    .await;
+
+    match result {
+        Ok(Ok(version)) => {
+            if let Some(bin) = paths::updated_ytdlp_path(&app) {
+                app.state::<DownloadManager>()
+                    .set_ytdlp_bin(bin.to_string_lossy().to_string());
+            }
+            app.dialog()
+                .message(format!("yt-dlp atualizado para a versão {version}."))
+                .title("yt-dlp atualizado")
+                .kind(MessageDialogKind::Info)
+                .blocking_show();
+        }
+        Ok(Err(err)) => {
+            log::error!("Falha ao atualizar yt-dlp: {err}");
+            app.dialog()
+                .message(format!("Falha ao atualizar o yt-dlp: {err}"))
+                .title("Erro")
+                .kind(MessageDialogKind::Error)
+                .blocking_show();
+        }
+        Err(err) => {
+            log::error!("Erro interno ao atualizar yt-dlp: {err}");
+            app.dialog()
+                .message(format!("Erro interno ao atualizar o yt-dlp: {err}"))
+                .title("Erro")
+                .kind(MessageDialogKind::Error)
+                .blocking_show();
+        }
+    }
+}
 
 async fn check_for_update(app: AppHandle, silent: bool) {
     let updater = match app.updater() {
@@ -120,6 +162,7 @@ fn build_menu(app: &AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
                 true,
                 None::<&str>,
             )?,
+            &MenuItem::with_id(app, "update-ytdlp", "Atualizar yt-dlp", true, None::<&str>)?,
         ],
     )?;
 
@@ -132,13 +175,33 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(
+            tauri_plugin_log::Builder::new()
+                .targets([
+                    Target::new(TargetKind::Stdout),
+                    Target::new(TargetKind::LogDir {
+                        file_name: Some("ez-downloader".to_string()),
+                    }),
+                ])
+                .level(log::LevelFilter::Info)
+                .build(),
+        )
         .setup(|app| {
             let handle: AppHandle = app.handle().clone();
+
+            log::info!("EZ Downloader v{} iniciando", env!("CARGO_PKG_VERSION"));
 
             let ytdlp_bin = paths::get_ytdlp_bin(&handle);
             let ffmpeg_bin = paths::get_ffmpeg_bin(&handle);
 
             let deps = check_dependencies(&ytdlp_bin, &ffmpeg_bin);
+            log::info!(
+                "Dependências: yt-dlp={} ({}), ffmpeg={} ({})",
+                if deps.ytdlp.available { "ok" } else { "ausente" },
+                ytdlp_bin,
+                if deps.ffmpeg.available { "ok" } else { "ausente" },
+                ffmpeg_bin
+            );
             if !deps.ytdlp.available {
                 handle
                     .dialog()
@@ -153,7 +216,7 @@ pub fn run() {
                 return Ok(());
             }
             if !deps.ffmpeg.available {
-                eprintln!("Aviso: ffmpeg não encontrado — mesclagem de vídeo+áudio pode falhar em alguns formatos.");
+                log::warn!("ffmpeg não encontrado — mesclagem de vídeo+áudio pode falhar em alguns formatos.");
             }
 
             let default_download_path = handle
@@ -186,6 +249,10 @@ pub fn run() {
                     let handle = about_handle.clone();
                     tauri::async_runtime::spawn(check_for_update(handle, false));
                 }
+                "update-ytdlp" => {
+                    let handle = about_handle.clone();
+                    tauri::async_runtime::spawn(update_ytdlp_flow(handle));
+                }
                 _ => {}
             });
 
@@ -200,6 +267,7 @@ pub fn run() {
             commands::select_download_path,
             commands::get_downloads_path,
             commands::open_path,
+            commands::update_ytdlp,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

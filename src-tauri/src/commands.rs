@@ -96,6 +96,23 @@ pub fn get_downloads_path(app: AppHandle) -> Option<String> {
 }
 
 #[tauri::command]
+pub async fn update_ytdlp(
+    app: AppHandle,
+    manager: State<'_, DownloadManager>,
+) -> Result<String, String> {
+    let manager = manager.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let version = crate::ytdlp_updater::update(&app)?;
+        if let Some(bin) = crate::paths::updated_ytdlp_path(&app) {
+            manager.set_ytdlp_bin(bin.to_string_lossy().to_string());
+        }
+        Ok(version)
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
 pub fn open_path(app: AppHandle, path: String) -> Result<(), String> {
     app.opener()
         .open_path(path, None::<&str>)
