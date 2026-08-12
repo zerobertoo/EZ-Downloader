@@ -12,6 +12,8 @@ const UI_STRINGS = {
   errorFetchFormats: "Erro ao buscar formatos:",
   errorNoPath: "Por favor, selecione um diretório de download",
   errorIncompleteSection: "Preencha início e fim do corte, ou deixe os dois em branco",
+  errorInvalidSection: "Formato de tempo inválido — use HH:MM:SS (ex: 00:01:30)",
+  hintPlaylist: "URL de playlist detectada — todos os itens serão baixados de uma vez",
   errorSelectDir: "Erro ao selecionar diretório",
   errorOpenFolder: "Erro ao abrir pasta de downloads",
   errorCancel: "Erro ao cancelar download",
@@ -38,6 +40,9 @@ interface VideoMetadata {
 type Phase = "idle" | "fetching" | "ready" | "downloading" | "done" | "failed";
 
 const DEBUG_LOG_MAX_LINES = 500;
+const PATH_STORAGE_KEY = "ez-download-path";
+/** Aceita MM:SS ou HH:MM:SS — mesma sintaxe do --download-sections do yt-dlp. */
+const TIME_PATTERN = /^\d{1,2}:\d{2}(:\d{2})?$/;
 
 const state = {
   phase: "idle" as Phase,
@@ -49,11 +54,14 @@ const state = {
   quickFormat: "mp4" as "mp4" | "mp3",
   nerdMode: false,
   debugLines: [] as { stream: "stdout" | "stderr"; text: string }[],
+  /** Evita que a rejeição do processo morto pelo cancelamento vire banner de erro. */
+  cancelRequested: false,
 };
 
 const elements = {
   app: document.getElementById("app"),
   urlInput: document.getElementById("urlInput") as HTMLInputElement | null,
+  playlistHint: document.getElementById("playlistHint"),
   fetchFormatsBtn: document.getElementById("fetchFormatsBtn") as HTMLButtonElement | null,
   urlError: document.getElementById("urlError"),
   loadingRegion: document.getElementById("loadingRegion"),
@@ -279,16 +287,21 @@ document.addEventListener("DOMContentLoaded", async () => {
   elements.urlInput?.addEventListener("input", () => {
     clearFieldError(elements.urlError);
     leaveOutcome();
+    renderPlaylistHint();
     render();
   });
 
   render();
+  renderPlaylistHint();
 
   try {
     const version = await bridge.getVersion();
     if (elements.version) elements.version.textContent = `v${version}`;
 
-    const downloadsPath = await bridge.getDownloadsPath();
+    // A pasta escolhida manualmente sobrevive entre sessões; sem escolha
+    // prévia, cai no diretório Downloads do SO.
+    const savedPath = localStorage.getItem(PATH_STORAGE_KEY);
+    const downloadsPath = savedPath || (await bridge.getDownloadsPath());
     if (downloadsPath) {
       state.downloadPath = downloadsPath;
       updateDownloadPathDisplay();
@@ -543,6 +556,7 @@ async function handleSelectPath() {
     const path = await bridge.selectDownloadPath();
     if (path) {
       state.downloadPath = path;
+      localStorage.setItem(PATH_STORAGE_KEY, path);
       updateDownloadPathDisplay();
       clearFieldError(elements.pathError);
       leaveOutcome();
@@ -575,6 +589,13 @@ async function handleDownload() {
   const sectionEnd = elements.sectionEnd?.value.trim() || undefined;
   if (Boolean(sectionStart) !== Boolean(sectionEnd)) {
     setFieldError(elements.sectionError, UI_STRINGS.errorIncompleteSection);
+    return;
+  }
+  if (
+    (sectionStart && !TIME_PATTERN.test(sectionStart)) ||
+    (sectionEnd && !TIME_PATTERN.test(sectionEnd))
+  ) {
+    setFieldError(elements.sectionError, UI_STRINGS.errorInvalidSection);
     return;
   }
 
@@ -624,6 +645,7 @@ async function performDownload(
   setPhase("downloading");
   resetProgress();
   clearDebugLog();
+  state.cancelRequested = false;
 
   try {
     const result = await bridge.startDownload(state.currentUrl, format, state.downloadPath, options);
@@ -633,6 +655,12 @@ async function performDownload(
     showBanner(UI_STRINGS.bannerSuccessTitle, `Salvo em: ${result.path}`);
     setPhase("done");
   } catch (error) {
+    // O kill do cancelamento derruba o processo com exit != 0 — sem este
+    // guarda, "Cancelar" virava banner de erro por cima do estado ready.
+    if (state.cancelRequested) {
+      console.log("Download cancelado pelo usuário");
+      return;
+    }
     console.error("Erro no download:", error);
     showBanner(UI_STRINGS.bannerErrorTitle, errorMessage(error));
     setPhase("failed");
@@ -679,9 +707,11 @@ function resetProgress() {
 
 async function handleCancel() {
   try {
+    state.cancelRequested = true;
     await bridge.cancelDownload();
     setPhase("ready");
   } catch (error) {
+    state.cancelRequested = false;
     console.error("Erro ao cancelar:", error);
     showBanner(UI_STRINGS.bannerErrorTitle, UI_STRINGS.errorCancel);
     setPhase("failed");
@@ -716,6 +746,29 @@ function isValidUrl(value: string): boolean {
     return true;
   } catch {
     return false;
+  }
+}
+
+/**
+ * Heurística de playlist: cobre YouTube (?list=), páginas /playlist e sets do
+ * SoundCloud. Sem --no-playlist o yt-dlp baixa a playlist inteira sem avisar.
+ */
+function looksLikePlaylist(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    if (parsed.searchParams.has("list")) return true;
+    return /\/(playlist|sets)(\/|$)/.test(parsed.pathname);
+  } catch {
+    return false;
+  }
+}
+
+function renderPlaylistHint() {
+  if (!elements.playlistHint) return;
+  const isPlaylist = looksLikePlaylist(urlFieldValue());
+  toggle(elements.playlistHint, isPlaylist);
+  if (isPlaylist) {
+    elements.playlistHint.textContent = UI_STRINGS.hintPlaylist;
   }
 }
 
