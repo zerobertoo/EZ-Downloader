@@ -1,0 +1,32 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "bounce-easing",
+        "value": "cubic-bezier(0.34, 1.56, 0.64, 1.0)",
+        "createdAt": "2026-08-13T05:24:09.800Z",
+        "reason": "audit judged intentional: --spring used only on small hover/active transforms (button lift, swatch scale), not layout motion — matches app's tactile feel"
+      },
+      {
+        "rule": "layout-transition",
+        "value": "*",
+        "files": [
+          "src/styles.css"
+        ],
+        "createdAt": "2026-08-13T05:24:09.822Z",
+        "reason": "audit judged low-impact: padding/max-height/width transitions fire on discrete state changes (hero collapse, progress fill), not continuous — real-world jank negligible, P3 in audit report"
+      },
+      {
+        "rule": "broken-image",
+        "value": "*",
+        "files": [
+          "index.html"
+        ],
+        "createdAt": "2026-08-13T05:27:36.520Z",
+        "reason": "audit-verified false positive: videoThumbnail src is set dynamically in src/ui/formats.ts once a video loads, never rendered empty"
+      }
+    ]
+  }
+}

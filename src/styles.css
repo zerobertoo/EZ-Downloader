@@ -38,7 +38,7 @@
   /* Text */
   --text:   #edf0f5;
   --text-2: #8892a0;
-  --text-3: #4c5462;
+  --text-3: #7a828d;
 
   /* Feedback — fixo, não segue o tema */
   --green:      #34d399;
@@ -261,9 +261,9 @@ body {
   box-shadow: 0 1px 0 rgba(255,255,255,0.03) inset, 0 10px 28px rgba(0,0,0,0.38);
 }
 
-/* Estado compacto: o hero recolhe suavemente (max-height, não display:none) */
+/* Estado compacto: o hero recolhe suavemente (grid-template-rows, não display:none) */
 #app[data-hero="collapsed"] .input-card { padding: 14px 18px; box-shadow: 0 1px 0 rgba(255,255,255,0.03) inset, 0 6px 18px rgba(0,0,0,0.32); }
-#app[data-hero="collapsed"] .input-hero { max-height: 0; opacity: 0; margin-bottom: 0; }
+#app[data-hero="collapsed"] .input-hero { grid-template-rows: 0fr; opacity: 0; margin-bottom: 0; }
 #app[data-hero="collapsed"] .input-card-shimmer { opacity: 0; }
 
 /* Top accent line */
@@ -292,12 +292,19 @@ body {
   transition: opacity var(--dur) var(--ease);
 }
 
+/* Colapso via grid-template-rows: sem altura em px chutada — não corta o
+   texto se a tradução for maior ou o usuário aumentar a fonte do SO. */
 .input-hero {
-  max-height: 120px;
+  display: grid;
+  grid-template-rows: 1fr;
   opacity: 1;
-  overflow: hidden;
   margin-bottom: 26px;
-  transition: max-height var(--dur-lg) var(--ease), opacity var(--dur) var(--ease), margin-bottom var(--dur-lg) var(--ease);
+  transition: grid-template-rows var(--dur-lg) var(--ease), opacity var(--dur) var(--ease), margin-bottom var(--dur-lg) var(--ease);
+}
+
+.input-hero-inner {
+  overflow: hidden;
+  min-height: 0;
 }
 
 .hero-eyebrow {
@@ -951,6 +958,11 @@ body {
   border-color: rgba(248,113,113,0.22);
 }
 
+.outcome-banner.is-cancelled {
+  background: var(--surface-2);
+  border-color: var(--border);
+}
+
 .banner-icon {
   width: 30px;
   height: 30px;
@@ -975,10 +987,17 @@ body {
   box-shadow: 0 0 16px var(--red-glow);
 }
 
+.is-cancelled .banner-icon {
+  background: var(--surface-3);
+  border: 1px solid var(--border-2);
+  color: var(--text-3);
+}
+
 .banner-icon-success,
 .banner-icon-error { display: none; }
-.is-success .banner-icon-success { display: block; }
-.is-error   .banner-icon-error   { display: block; }
+.is-success   .banner-icon-success { display: block; }
+.is-error     .banner-icon-error   { display: block; }
+.is-cancelled .banner-icon-error   { display: block; }
 
 .banner-body {
   flex: 1;
@@ -1081,6 +1100,15 @@ body {
   0%   { opacity: 0; transform: translateX(0); }
   40%  { opacity: 1; }
   100% { opacity: 0; transform: translateX(-60px); }
+}
+
+/* Movimento decorativo contínuo (não entrada/feedback pontual) desligado
+   para quem pede menos animação — estado final visível permanece. */
+@media (prefers-reduced-motion: reduce) {
+  .eyebrow-dot { animation: none; box-shadow: 0 0 8px var(--accent-glow); }
+  .orb-ring-outer { animation: none; opacity: 0.5; }
+  .progress-fill::after { animation: none; display: none; }
+  .loader-arc, .fetch-spinner { animation-duration: 1.4s; }
 }
 
 /* ════════════════════════════════════════════════════════════════
@@ -1241,3 +1269,278 @@ body {
 
 .debug-log-line { white-space: pre-wrap; word-break: break-all; }
 .debug-log-line.is-stderr { color: var(--red); opacity: 0.85; }
+
+/* ════════════════════════════════════════════════════════════════
+   DOWNLOADS — fila concorrente + HISTÓRICO — seções da sessão
+   ════════════════════════════════════════════════════════════════ */
+.section-heading {
+  font-size: 0.6875rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-3);
+}
+
+.downloads-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.downloads-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.download-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 1.25rem;
+  padding: 16px 18px;
+  animation: appear var(--dur) var(--ease) both;
+  box-shadow: 0 1px 0 rgba(255,255,255,0.03) inset, 0 8px 22px rgba(0,0,0,0.32);
+}
+
+.download-card-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.download-card-title {
+  flex: 1;
+  min-width: 0;
+  font-size: 0.875rem;
+  font-weight: 650;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.download-card-badge {
+  flex-shrink: 0;
+  height: 22px;
+  padding: 0 9px;
+  display: flex;
+  align-items: center;
+  background: var(--accent-dim);
+  border: 1px solid var(--border-focus);
+  border-radius: 99px;
+  color: var(--accent-bright);
+  font-size: 0.6875rem;
+  font-weight: 700;
+}
+
+.download-card-remove {
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  border: none;
+  background: transparent;
+  color: var(--text-3);
+  font-size: 1.1rem;
+  line-height: 1;
+  cursor: pointer;
+  border-radius: 50%;
+  transition: background var(--dur-sm) var(--ease), color var(--dur-sm) var(--ease);
+}
+
+.download-card-remove:hover {
+  background: var(--surface-3);
+  color: var(--text);
+}
+
+.download-card .progress-region {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: none;
+  gap: 14px;
+}
+
+.download-card .outcome-banner {
+  margin-top: 0;
+}
+
+/* ── Histórico ───────────────────────── */
+.history-section {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 1.25rem;
+  overflow: hidden;
+}
+
+.history-toggle {
+  width: 100%;
+  height: 46px;
+  padding: 0 18px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: var(--text-2);
+}
+
+.history-toggle-caret {
+  color: var(--text-3);
+  transition: transform var(--dur-sm) var(--ease);
+}
+
+.history-toggle[aria-expanded="true"] .history-toggle-caret {
+  transform: rotate(180deg);
+}
+
+.history-body {
+  padding: 0 18px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.history-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.history-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+}
+
+.history-row-icon {
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.history-row.is-done .history-row-icon {
+  background: var(--green-dim);
+  color: var(--green);
+}
+
+.history-row.is-failed .history-row-icon {
+  background: var(--red-dim);
+  color: var(--red);
+}
+
+.history-row.is-cancelled .history-row-icon {
+  background: var(--surface-3);
+  color: var(--text-3);
+}
+
+.history-row-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.history-row-title {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.history-row-meta {
+  font-size: 0.6875rem;
+  color: var(--text-3);
+  font-family: var(--font-mono);
+}
+
+.history-row-btn {
+  flex-shrink: 0;
+  height: 28px;
+  padding: 0 12px;
+  background: var(--surface-3);
+  border: 1px solid var(--border-2);
+  border-radius: 0.5rem;
+  color: var(--text-2);
+  font-family: var(--font);
+  font-size: 0.7rem;
+  font-weight: 650;
+  cursor: pointer;
+  transition: background var(--dur-sm) var(--ease), color var(--dur-sm) var(--ease);
+}
+
+.history-row-btn:hover {
+  background: var(--surface-4);
+  color: var(--text);
+}
+
+.history-empty {
+  padding: 12px 0;
+  text-align: center;
+  font-size: 0.75rem;
+  color: var(--text-3);
+}
+
+.history-clear-btn {
+  align-self: flex-start;
+  height: 30px;
+  padding: 0 12px;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  color: var(--text-3);
+  font-family: var(--font);
+  font-size: 0.7rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background var(--dur-sm) var(--ease), color var(--dur-sm) var(--ease), border-color var(--dur-sm) var(--ease);
+}
+
+.history-clear-btn:hover {
+  background: var(--red-dim);
+  color: var(--red);
+  border-color: rgba(248,113,113,0.28);
+}
+
+/* ════════════════════════════════════════════════════════════════
+   ENTRADA POR TOQUE — telas touchscreen (laptops 2-em-1, tablets Windows).
+   Tauri roda sem alteração nesses dispositivos; :hover não dispara no toque.
+   ════════════════════════════════════════════════════════════════ */
+@media (hover: none) {
+  .mode-pill:active,
+  .theme-btn:active,
+  .browse-btn:active,
+  .history-row-btn:active,
+  .history-clear-btn:active,
+  .cancel-btn:active {
+    background: var(--surface-4);
+  }
+
+  .theme-btn:active,
+  .cancel-btn:active { color: var(--text); }
+}
+
+@media (pointer: coarse) {
+  .theme-btn,
+  .mode-pill,
+  .download-card-remove {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  .history-row-btn,
+  .history-clear-btn,
+  .banner-btn {
+    min-height: 44px;
+  }
+}

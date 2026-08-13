@@ -1,20 +1,20 @@
-import { bridge } from "./bridge";
 import { UI_STRINGS, elements, state } from "./state";
 import { errorMessage, isValidUrl, urlFieldValue } from "./utils";
-import { clearDebugLog } from "./ui/debug";
-import { clearFieldErrors, setFieldError, showBanner } from "./ui/feedback";
-import { resetProgress, updateProgress } from "./ui/progress";
-import { setPhase } from "./ui/render";
+import { enqueueDownload } from "./downloads";
+import { clearFieldErrors, setFieldError } from "./ui/feedback";
+import { render } from "./ui/render";
 
 /* ════════════════════════════════════════════════════════════════
-   DOWNLOAD
+   DOWNLOAD — validação do formulário + enfileiramento
    ════════════════════════════════════════════════════════════════ */
 
 /** Aceita MM:SS ou HH:MM:SS — mesma sintaxe do --download-sections do yt-dlp. */
 const TIME_PATTERN = /^\d{1,2}:\d{2}(:\d{2})?$/;
 
+let submitting = false;
+
 export async function handleDownload() {
-  if (state.phase !== "ready" || !state.selectedFormat) return;
+  if (state.phase !== "ready" || !state.selectedFormat || submitting) return;
 
   if (!state.downloadPath) {
     setFieldError(elements.pathError, UI_STRINGS.errorNoPath);
@@ -39,17 +39,37 @@ export async function handleDownload() {
     ? elements.subLangsInput?.value.trim() || undefined
     : undefined;
 
-  await performDownload(state.selectedFormat.id, {
-    sectionStart,
-    sectionEnd,
-    subLangs,
-    extraArgs: elements.extraArgsInput?.value.trim() || undefined,
-  });
+  clearFieldErrors();
+  submitting = true;
+  if (elements.downloadBtn) elements.downloadBtn.disabled = true;
+  try {
+    await enqueueDownload({
+      url: state.currentUrl,
+      format: state.selectedFormat.id,
+      formatLabel: state.selectedFormat.label,
+      title: state.videoMetadata.title,
+      outputPath: state.downloadPath,
+      options: {
+        sectionStart,
+        sectionEnd,
+        subLangs,
+        extraArgs: elements.extraArgsInput?.value.trim() || undefined,
+      },
+    });
+  } catch (error) {
+    console.error("Erro ao iniciar download:", error);
+    setFieldError(elements.urlError, `${UI_STRINGS.errorStartDownload} ${errorMessage(error)}`);
+  } finally {
+    submitting = false;
+    render();
+  }
 }
+
+let quickSubmitting = false;
 
 /** Modo Rápido: sem metadados prévios, dispara direto na melhor qualidade. */
 export async function handleQuickDownload() {
-  if (state.phase === "downloading") return;
+  if (quickSubmitting) return;
 
   const url = urlFieldValue();
   clearFieldErrors();
@@ -62,74 +82,29 @@ export async function handleQuickDownload() {
     setFieldError(elements.urlError, UI_STRINGS.errorInvalidUrl);
     return;
   }
-
-  state.currentUrl = url;
-  await performDownload(state.quickFormat === "mp3" ? "quick-mp3" : "quick-mp4", {});
-}
-
-/** Lógica de download comum aos dois modos — fase, progresso e banner. */
-async function performDownload(
-  format: string,
-  options: { sectionStart?: string; sectionEnd?: string; subLangs?: string; extraArgs?: string }
-) {
   if (!state.downloadPath) {
     setFieldError(elements.pathError, UI_STRINGS.errorNoPath);
     return;
   }
 
-  clearFieldErrors();
-  setPhase("downloading");
-  resetProgress();
-  clearDebugLog();
-  state.cancelRequested = false;
-
+  const isMp3 = state.quickFormat === "mp3";
+  quickSubmitting = true;
+  if (elements.quickDownloadBtn) elements.quickDownloadBtn.disabled = true;
   try {
-    const result = await bridge.startDownload(state.currentUrl, format, state.downloadPath, options);
-
-    await new Promise((resolve) => setTimeout(resolve, 500));
-    updateProgress(100);
-    showBanner(UI_STRINGS.bannerSuccessTitle, `Salvo em: ${result.path}`);
-    setPhase("done");
+    await enqueueDownload({
+      url,
+      format: isMp3 ? "quick-mp3" : "quick-mp4",
+      formatLabel: isMp3 ? "Áudio (MP3)" : "Vídeo (MP4)",
+      title: null,
+      outputPath: state.downloadPath,
+      options: {},
+    });
+    if (elements.urlInput) elements.urlInput.value = "";
   } catch (error) {
-    // O kill do cancelamento derruba o processo com exit != 0 — sem este
-    // guarda, "Cancelar" virava banner de erro por cima do estado ready.
-    if (state.cancelRequested) {
-      console.log("Download cancelado pelo usuário");
-      return;
-    }
-    console.error("Erro no download:", error);
-    showBanner(UI_STRINGS.bannerErrorTitle, errorMessage(error));
-    setPhase("failed");
-  }
-}
-
-export async function handleCancel() {
-  try {
-    state.cancelRequested = true;
-    await bridge.cancelDownload();
-    setPhase("ready");
-  } catch (error) {
-    state.cancelRequested = false;
-    console.error("Erro ao cancelar:", error);
-    showBanner(UI_STRINGS.bannerErrorTitle, UI_STRINGS.errorCancel);
-    setPhase("failed");
-  }
-}
-
-export async function handleRetry() {
-  showBanner("", "");
-  setPhase("ready");
-  await handleDownload();
-}
-
-export async function handleOpenFolder() {
-  if (!state.downloadPath) return;
-
-  try {
-    await bridge.openPath(state.downloadPath);
-  } catch (error) {
-    console.error("Erro ao abrir pasta:", error);
-    showBanner(UI_STRINGS.bannerErrorTitle, UI_STRINGS.errorOpenFolder);
-    setPhase("failed");
+    console.error("Erro ao iniciar download:", error);
+    setFieldError(elements.urlError, `${UI_STRINGS.errorStartDownload} ${errorMessage(error)}`);
+  } finally {
+    quickSubmitting = false;
+    if (elements.quickDownloadBtn) elements.quickDownloadBtn.disabled = false;
   }
 }

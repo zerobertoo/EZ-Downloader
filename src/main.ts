@@ -3,20 +3,15 @@ import { initMode, currentMode } from "./mode";
 import { initTheme } from "./theme";
 import { PATH_STORAGE_KEY, UI_STRINGS, elements, state } from "./state";
 import { renderPlaylistHint, toggle } from "./utils";
-import {
-  handleCancel,
-  handleDownload,
-  handleOpenFolder,
-  handleQuickDownload,
-  handleRetry,
-} from "./download";
+import { handleDownload, handleQuickDownload } from "./download";
+import { handleDownloadFinished, initDownloadsUI, updateDownloadProgress } from "./downloads";
 import { appendDebugLine, showDebugCommand, toggleNerdMode } from "./ui/debug";
 import { handleSelectPath, updateDownloadPathDisplay } from "./ui/destination";
 import { clearFieldError, setFieldError } from "./ui/feedback";
 import { handleFetchFormats, handleFormatChange } from "./ui/formats";
+import { initHistoryUI, loadHistory } from "./ui/history";
 import { handleToggleMode, renderModeLabel, setQuickFormat } from "./ui/mode-controls";
-import { updateProgress } from "./ui/progress";
-import { leaveOutcome, render } from "./ui/render";
+import { render } from "./ui/render";
 import { closeThemePopover, toggleThemePopover } from "./ui/theme-popover";
 
 initTheme();
@@ -27,9 +22,6 @@ document.addEventListener("DOMContentLoaded", async () => {
   elements.formatSelect?.addEventListener("change", handleFormatChange);
   elements.downloadBtn?.addEventListener("click", handleDownload);
   elements.selectPathBtn?.addEventListener("click", handleSelectPath);
-  elements.cancelBtn?.addEventListener("click", handleCancel);
-  elements.retryBtn?.addEventListener("click", handleRetry);
-  elements.openFolderBtn?.addEventListener("click", handleOpenFolder);
   elements.themeToggleBtn?.addEventListener("click", (e) => {
     e.stopPropagation();
     toggleThemePopover();
@@ -44,10 +36,21 @@ document.addEventListener("DOMContentLoaded", async () => {
   });
   elements.nerdModeBtn?.addEventListener("click", toggleNerdMode);
   renderModeLabel();
+  initDownloadsUI();
+  initHistoryUI();
   document.addEventListener("click", (e) => {
     const popover = elements.themePopover;
     if (popover && !popover.classList.contains("hidden") && !popover.contains(e.target as Node) && e.target !== elements.themeToggleBtn) {
       closeThemePopover();
+    }
+  });
+
+  document.addEventListener("keydown", (e) => {
+    if (e.key !== "Escape") return;
+    const popover = elements.themePopover;
+    if (popover && !popover.classList.contains("hidden")) {
+      closeThemePopover();
+      elements.themeToggleBtn?.focus();
     }
   });
 
@@ -60,11 +63,9 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
   });
 
-  // Editar a URL sai de done/failed e reavalia se o vídeo carregado ainda
-  // corresponde ao que está no campo.
+  // Editar a URL reavalia se o vídeo carregado ainda corresponde ao que está no campo.
   elements.urlInput?.addEventListener("input", () => {
     clearFieldError(elements.urlError);
-    leaveOutcome();
     renderPlaylistHint();
     render();
   });
@@ -85,9 +86,12 @@ document.addEventListener("DOMContentLoaded", async () => {
       updateDownloadPathDisplay();
     }
 
-    await bridge.onDownloadProgress((progress) => updateProgress(progress));
-    await bridge.onDebugCommand((command) => showDebugCommand(command));
+    await bridge.onDownloadProgress((progress) => updateDownloadProgress(progress));
+    await bridge.onDownloadFinished((finished) => handleDownloadFinished(finished));
+    await bridge.onDebugCommand((command) => showDebugCommand(command.id, command.command));
     await bridge.onDebugLine((line) => appendDebugLine(line));
+
+    await loadHistory();
   } catch (error) {
     console.error("Erro ao inicializar:", error);
     setFieldError(elements.urlError, UI_STRINGS.errorInit);
