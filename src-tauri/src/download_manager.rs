@@ -278,6 +278,8 @@ impl DownloadManager {
         args.push("--progress".to_string());
         args.push("--newline".to_string());
         args.push("--no-warnings".to_string());
+        args.push("--encoding".to_string());
+        args.push("utf-8".to_string());
         args.push(url.to_string());
 
         let ytdlp_bin = self.current_ytdlp_bin();
