@@ -3,10 +3,17 @@ import { elements, state } from "../state";
 import { toggle } from "../utils";
 
 /* ════════════════════════════════════════════════════════════════
-   MODO NERD — comando montado + log ao vivo
+   MODO NERD — comando montado + log ao vivo do ÚLTIMO download iniciado
    ════════════════════════════════════════════════════════════════ */
 
 const DEBUG_LOG_MAX_LINES = 500;
+
+// O evento "download-debug-command" pode chegar antes da promise de
+// start_download resolver (dois canais IPC distintos, sem ordem garantida),
+// ou seja, antes de setDebugDownload registrar o id como "atual". Sem isso o
+// comando some silenciosamente. Guarda por id até o registro acontecer.
+const pendingCommands = new Map<string, string>();
+const pendingLines = new Map<string, { stream: "stdout" | "stderr"; text: string }[]>();
 
 export function toggleNerdMode() {
   state.nerdMode = !state.nerdMode;
@@ -27,18 +34,42 @@ function replayDebugLog() {
   elements.debugLog.scrollTop = elements.debugLog.scrollHeight;
 }
 
-export function clearDebugLog() {
+/** Chamado a cada novo download iniciado — o painel passa a seguir ele. */
+export function setDebugDownload(id: string) {
+  state.debugDownloadId = id;
   state.debugLines = [];
   if (elements.debugCommand) elements.debugCommand.textContent = "";
   if (elements.debugLog) elements.debugLog.innerHTML = "";
+
+  const pendingCommand = pendingCommands.get(id);
+  if (pendingCommand !== undefined) {
+    if (elements.debugCommand) elements.debugCommand.textContent = pendingCommand;
+    pendingCommands.delete(id);
+  }
+  const bufferedLines = pendingLines.get(id);
+  if (bufferedLines) {
+    for (const line of bufferedLines) appendDebugLine({ id, ...line });
+    pendingLines.delete(id);
+  }
 }
 
-export function showDebugCommand(command: string) {
+export function showDebugCommand(id: string, command: string) {
+  if (id !== state.debugDownloadId) {
+    pendingCommands.set(id, command);
+    return;
+  }
   if (elements.debugCommand) elements.debugCommand.textContent = command;
 }
 
 export function appendDebugLine(line: DebugLine) {
-  state.debugLines.push(line);
+  if (line.id !== state.debugDownloadId) {
+    const buffered = pendingLines.get(line.id) ?? [];
+    buffered.push({ stream: line.stream, text: line.text });
+    pendingLines.set(line.id, buffered);
+    return;
+  }
+
+  state.debugLines.push({ stream: line.stream, text: line.text });
   if (state.debugLines.length > DEBUG_LOG_MAX_LINES) {
     state.debugLines.splice(0, state.debugLines.length - DEBUG_LOG_MAX_LINES);
   }

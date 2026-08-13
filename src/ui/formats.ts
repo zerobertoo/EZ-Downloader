@@ -1,15 +1,15 @@
 import { bridge, type FormatOption } from "../bridge";
 import { UI_STRINGS, elements, state } from "../state";
 import { errorMessage, formatFileSize, isValidUrl, urlFieldValue } from "../utils";
-import { clearFieldErrors, setFieldError, showBanner } from "./feedback";
-import { leaveOutcome, setPhase } from "./render";
+import { clearFieldErrors, setFieldError } from "./feedback";
+import { setPhase } from "./render";
 
 /* ════════════════════════════════════════════════════════════════
    BUSCA DE FORMATOS
    ════════════════════════════════════════════════════════════════ */
 
 export async function handleFetchFormats() {
-  if (state.phase === "downloading" || state.phase === "fetching") return;
+  if (state.phase === "fetching") return;
 
   const url = urlFieldValue();
   clearFieldErrors();
@@ -28,7 +28,6 @@ export async function handleFetchFormats() {
   state.formats = [];
   state.selectedFormat = null;
   state.videoMetadata = { title: null, thumbnail: null, uploader: null };
-  showBanner("", "");
   setPhase("fetching");
 
   try {
@@ -102,7 +101,6 @@ function populateFormatSelect() {
 
 export function handleFormatChange() {
   applySelectedFormat();
-  leaveOutcome();
 }
 
 function applySelectedFormat() {

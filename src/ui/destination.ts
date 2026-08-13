@@ -1,7 +1,6 @@
 import { bridge } from "../bridge";
 import { PATH_STORAGE_KEY, UI_STRINGS, elements, state } from "../state";
 import { clearFieldError, setFieldError } from "./feedback";
-import { leaveOutcome } from "./render";
 
 /* ════════════════════════════════════════════════════════════════
    DESTINO
@@ -15,7 +14,6 @@ export async function handleSelectPath() {
       localStorage.setItem(PATH_STORAGE_KEY, path);
       updateDownloadPathDisplay();
       clearFieldError(elements.pathError);
-      leaveOutcome();
     }
   } catch (error) {
     console.error("Erro ao selecionar diretório:", error);

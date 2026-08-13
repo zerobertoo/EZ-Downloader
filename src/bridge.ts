@@ -28,15 +28,18 @@ export interface FormatsResult {
   uploader: string | null;
 }
 
-export interface DownloadResult {
-  path: string;
-  message: string;
-}
-
 export interface DownloadProgress {
+  id: string;
   percent: number;
   speed: string | null;
   eta: string | null;
+}
+
+export interface DownloadFinished {
+  id: string;
+  status: "done" | "failed" | "cancelled";
+  path: string | null;
+  error: string | null;
 }
 
 export interface StartDownloadOptions {
@@ -46,9 +49,26 @@ export interface StartDownloadOptions {
   extraArgs?: string;
 }
 
+export interface DebugCommand {
+  id: string;
+  command: string;
+}
+
 export interface DebugLine {
+  id: string;
   stream: "stdout" | "stderr";
   text: string;
+}
+
+export interface HistoryEntry {
+  id: string;
+  url: string;
+  title: string | null;
+  format: string;
+  outputPath: string;
+  status: "done" | "failed" | "cancelled";
+  error: string | null;
+  finishedAt: string;
 }
 
 export const bridge = {
@@ -58,16 +78,19 @@ export const bridge = {
 
   getFormats: (url: string): Promise<FormatsResult> => invoke("get_formats", { url }),
 
+  /** Retorna o id do download imediatamente — o fim chega via evento "download-finished". */
   startDownload: (
     url: string,
     format: string,
     outputPath: string,
+    title?: string,
     options: StartDownloadOptions = {}
-  ): Promise<DownloadResult> =>
+  ): Promise<string> =>
     invoke("start_download", {
       url,
       format,
       outputPath,
+      title: title ?? null,
       sectionStart: options.sectionStart ?? null,
       sectionEnd: options.sectionEnd ?? null,
       subLangs: options.subLangs ?? null,
@@ -80,13 +103,34 @@ export const bridge = {
 
   openPath: (path: string): Promise<void> => invoke("open_path", { path }),
 
-  cancelDownload: (): Promise<void> => invoke("cancel_download"),
+  cancelDownload: (id: string): Promise<void> => invoke("cancel_download", { id }),
+
+  getHistory: (): Promise<HistoryEntry[]> =>
+    invoke<
+      { id: string; url: string; title: string | null; format: string; output_path: string; status: string; error: string | null; finished_at: string }[]
+    >("get_history").then((entries) =>
+      entries.map((e) => ({
+        id: e.id,
+        url: e.url,
+        title: e.title,
+        format: e.format,
+        outputPath: e.output_path,
+        status: e.status as HistoryEntry["status"],
+        error: e.error,
+        finishedAt: e.finished_at,
+      }))
+    ),
+
+  clearHistory: (): Promise<void> => invoke("clear_history"),
 
   onDownloadProgress: (callback: (progress: DownloadProgress) => void): Promise<UnlistenFn> =>
     listen<DownloadProgress>("download-progress", (event) => callback(event.payload)),
 
-  onDebugCommand: (callback: (command: string) => void): Promise<UnlistenFn> =>
-    listen<string>("download-debug-command", (event) => callback(event.payload)),
+  onDownloadFinished: (callback: (finished: DownloadFinished) => void): Promise<UnlistenFn> =>
+    listen<DownloadFinished>("download-finished", (event) => callback(event.payload)),
+
+  onDebugCommand: (callback: (command: DebugCommand) => void): Promise<UnlistenFn> =>
+    listen<DebugCommand>("download-debug-command", (event) => callback(event.payload)),
 
   onDebugLine: (callback: (line: DebugLine) => void): Promise<UnlistenFn> =>
     listen<DebugLine>("download-debug-line", (event) => callback(event.payload)),

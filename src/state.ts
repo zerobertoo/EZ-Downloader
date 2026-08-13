@@ -1,4 +1,4 @@
-import type { FormatOption } from "./bridge";
+import type { FormatOption, StartDownloadOptions } from "./bridge";
 
 export const UI_STRINGS = {
   errorNoUrl: "Por favor, insira uma URL",
@@ -12,14 +12,24 @@ export const UI_STRINGS = {
   errorSelectDir: "Erro ao selecionar diretório",
   errorOpenFolder: "Erro ao abrir pasta de downloads",
   errorCancel: "Erro ao cancelar download",
+  errorClearHistory: "Erro ao limpar histórico",
   errorInit: "Erro ao inicializar a aplicação",
+  errorStartDownload: "Erro ao iniciar download:",
   hintUrlChanged: "URL alterada — aperte Buscar para carregar este vídeo",
   progressStarting: "Iniciando download...",
   progressDownloading: "Baixando...",
   progressFinalizing: "Finalizando...",
   progressComplete: "Download concluído!",
-  bannerSuccessTitle: "Download concluído!",
-  bannerErrorTitle: "Erro no download",
+  statusDone: "Concluído",
+  statusFailed: "Falhou",
+  statusCancelled: "Cancelado",
+  historyTitle: "Histórico",
+  historyEmpty: "Nenhum download ainda",
+  historyClear: "Limpar histórico",
+  historyClearConfirm: "Limpar todo o histórico de downloads?",
+  downloadRemove: "Remover",
+  downloadRetry: "Tentar novamente",
+  downloadOpenFolder: "Abrir pasta",
 };
 
 export interface VideoMetadata {
@@ -29,12 +39,30 @@ export interface VideoMetadata {
 }
 
 /**
- * Fase do fluxo. Substitui as antigas seções mutuamente exclusivas: a tela é
- * única e progressiva, e cada região aparece conforme a fase.
+ * Fase do FORMULÁRIO — não do download em si (downloads viraram itens
+ * concorrentes em `state.downloads`, veja downloads.ts). A tela é única e
+ * progressiva, cada região aparece conforme a fase.
  */
-export type Phase = "idle" | "fetching" | "ready" | "downloading" | "done" | "failed";
+export type Phase = "idle" | "fetching" | "ready";
 
 export const PATH_STORAGE_KEY = "ez-download-path";
+
+/** Um item da fila de downloads da sessão — do enfileiramento até o fim. */
+export interface DownloadItem {
+  id: string;
+  url: string;
+  title: string | null;
+  formatLabel: string;
+  format: string;
+  outputPath: string;
+  options: StartDownloadOptions;
+  phase: "active" | "done" | "failed" | "cancelled";
+  percent: number;
+  speed: string | null;
+  eta: string | null;
+  error: string | null;
+  resultPath: string | null;
+}
 
 export const state = {
   phase: "idle" as Phase,
@@ -46,8 +74,10 @@ export const state = {
   quickFormat: "mp4" as "mp4" | "mp3",
   nerdMode: false,
   debugLines: [] as { stream: "stdout" | "stderr"; text: string }[],
-  /** Evita que a rejeição do processo morto pelo cancelamento vire banner de erro. */
-  cancelRequested: false,
+  /** Id do último download iniciado — o painel Nerd só mostra o log dele. */
+  debugDownloadId: null as string | null,
+  /** Fila de downloads da sessão, mais recente por último (renderizado invertido). */
+  downloads: new Map<string, DownloadItem>(),
 };
 
 export const elements = {
@@ -68,17 +98,6 @@ export const elements = {
   selectPathBtn: document.getElementById("selectPathBtn") as HTMLButtonElement | null,
   pathError: document.getElementById("pathError"),
   downloadBtn: document.getElementById("downloadBtn") as HTMLButtonElement | null,
-  progressRegion: document.getElementById("progressRegion"),
-  progressFill: document.getElementById("progressFill") as HTMLElement | null,
-  progressText: document.getElementById("progressText"),
-  progressPercent: document.getElementById("progressPercent"),
-  progressStats: document.getElementById("progressStats"),
-  cancelBtn: document.getElementById("cancelBtn") as HTMLButtonElement | null,
-  outcomeBanner: document.getElementById("outcomeBanner"),
-  bannerTitle: document.getElementById("bannerTitle"),
-  bannerText: document.getElementById("bannerText"),
-  openFolderBtn: document.getElementById("openFolderBtn") as HTMLButtonElement | null,
-  retryBtn: document.getElementById("retryBtn") as HTMLButtonElement | null,
   version: document.getElementById("version"),
   themeToggleBtn: document.getElementById("themeToggleBtn") as HTMLButtonElement | null,
   themePopover: document.getElementById("themePopover"),
@@ -97,4 +116,12 @@ export const elements = {
   debugPanel: document.getElementById("debugPanel"),
   debugCommand: document.getElementById("debugCommand"),
   debugLog: document.getElementById("debugLog"),
+  downloadsSection: document.getElementById("downloadsSection"),
+  downloadsList: document.getElementById("downloadsList"),
+  historySection: document.getElementById("historySection"),
+  historyToggleBtn: document.getElementById("historyToggleBtn") as HTMLButtonElement | null,
+  historyBody: document.getElementById("historyBody"),
+  historyList: document.getElementById("historyList"),
+  historyEmpty: document.getElementById("historyEmpty"),
+  clearHistoryBtn: document.getElementById("clearHistoryBtn") as HTMLButtonElement | null,
 };

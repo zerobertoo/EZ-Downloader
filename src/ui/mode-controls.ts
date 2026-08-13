@@ -1,7 +1,6 @@
 import { currentMode, setMode, type AppMode } from "../mode";
 import { elements, state } from "../state";
 import { toggle } from "../utils";
-import { showBanner } from "./feedback";
 import { setPhase } from "./render";
 
 /* ════════════════════════════════════════════════════════════════
@@ -24,7 +23,6 @@ export function handleToggleMode() {
   state.selectedFormat = null;
   state.videoMetadata = { title: null, thumbnail: null, uploader: null };
   state.currentUrl = "";
-  showBanner("", "");
   setPhase("idle");
 
   // Campos exclusivos do Avançado não sobrevivem à troca de modo — senão

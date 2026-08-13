@@ -27,8 +27,3 @@ export function clearFieldErrors() {
   clearFieldError(elements.pathError);
   clearFieldError(elements.sectionError);
 }
-
-export function showBanner(title: string, message: string) {
-  if (elements.bannerTitle) elements.bannerTitle.textContent = title;
-  if (elements.bannerText) elements.bannerText.textContent = message;
-}
