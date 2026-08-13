@@ -17,7 +17,7 @@ use tauri_plugin_updater::UpdaterExt;
 
 /// Atualiza o yt-dlp embutido baixando o binário mais recente para o
 /// diretório de dados do app — sem precisar de uma release nova do app.
-async fn update_ytdlp_flow(app: AppHandle) {
+async fn update_ytdlp_flow(app: AppHandle, silent: bool) {
     let result = tauri::async_runtime::spawn_blocking({
         let app = app.clone();
         move || ytdlp_updater::update(&app)
@@ -30,27 +30,34 @@ async fn update_ytdlp_flow(app: AppHandle) {
                 app.state::<DownloadManager>()
                     .set_ytdlp_bin(bin.to_string_lossy().to_string());
             }
-            app.dialog()
-                .message(format!("yt-dlp atualizado para a versão {version}."))
-                .title("yt-dlp atualizado")
-                .kind(MessageDialogKind::Info)
-                .blocking_show();
+            log::info!("yt-dlp em uso: {version}");
+            if !silent {
+                app.dialog()
+                    .message(format!("yt-dlp atualizado para a versão {version}."))
+                    .title("yt-dlp atualizado")
+                    .kind(MessageDialogKind::Info)
+                    .blocking_show();
+            }
         }
         Ok(Err(err)) => {
             log::error!("Falha ao atualizar yt-dlp: {err}");
-            app.dialog()
-                .message(format!("Falha ao atualizar o yt-dlp: {err}"))
-                .title("Erro")
-                .kind(MessageDialogKind::Error)
-                .blocking_show();
+            if !silent {
+                app.dialog()
+                    .message(format!("Falha ao atualizar o yt-dlp: {err}"))
+                    .title("Erro")
+                    .kind(MessageDialogKind::Error)
+                    .blocking_show();
+            }
         }
         Err(err) => {
             log::error!("Erro interno ao atualizar yt-dlp: {err}");
-            app.dialog()
-                .message(format!("Erro interno ao atualizar o yt-dlp: {err}"))
-                .title("Erro")
-                .kind(MessageDialogKind::Error)
-                .blocking_show();
+            if !silent {
+                app.dialog()
+                    .message(format!("Erro interno ao atualizar o yt-dlp: {err}"))
+                    .title("Erro")
+                    .kind(MessageDialogKind::Error)
+                    .blocking_show();
+            }
         }
     }
 }
@@ -245,6 +252,7 @@ pub fn run() {
             app.set_menu(menu)?;
 
             tauri::async_runtime::spawn(check_for_update(handle.clone(), true));
+            tauri::async_runtime::spawn(update_ytdlp_flow(handle.clone(), true));
 
             let about_handle = handle.clone();
             app.on_menu_event(move |_app, event| match event.id().as_ref() {
@@ -266,7 +274,7 @@ pub fn run() {
                 }
                 "update-ytdlp" => {
                     let handle = about_handle.clone();
-                    tauri::async_runtime::spawn(update_ytdlp_flow(handle));
+                    tauri::async_runtime::spawn(update_ytdlp_flow(handle, false));
                 }
                 _ => {}
             });

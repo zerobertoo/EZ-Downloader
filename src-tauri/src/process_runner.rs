@@ -40,6 +40,8 @@ where
     let mut command = Command::new(bin);
     command
         .args(args)
+        .env("PYTHONIOENCODING", "utf-8")
+        .env("PYTHONUTF8", "1")
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
     #[cfg(windows)]
