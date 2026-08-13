@@ -977,7 +977,7 @@ dependencies = [
 
 [[package]]
 name = "ez-downloader-tauri"
-version = "2.1.3"
+version = "2.2.0"
 dependencies = [
  "chrono",
  "log",
