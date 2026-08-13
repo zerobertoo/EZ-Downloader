@@ -280,6 +280,9 @@ impl DownloadManager {
         args.push("--no-warnings".to_string());
         args.push("--encoding".to_string());
         args.push("utf-8".to_string());
+        let cookies_already_set = args
+            .iter()
+            .any(|a| a == "--cookies-from-browser" || a == "--cookies");
         args.push(url.to_string());
 
         let ytdlp_bin = self.current_ytdlp_bin();
@@ -289,68 +292,6 @@ impl DownloadManager {
             download_dir.display()
         );
 
-        let _ = app.emit(
-            "download-debug-command",
-            DebugCommand {
-                id: id.clone(),
-                command: format_command_for_display(&ytdlp_bin, &args),
-            },
-        );
-
-        let progress_re =
-            Regex::new(r"\[download\]\s+([\d.]+)%(?:.*?at\s+(\S+/s).*?ETA\s+([\d:]+))?").unwrap();
-        let progress_app = app.clone();
-        let progress_id = id.clone();
-        let mut last_progress = Instant::now()
-            .checked_sub(Duration::from_millis(PROGRESS_THROTTLE_MS as u64 + 1))
-            .unwrap_or_else(Instant::now);
-
-        let debug_stdout_app = app.clone();
-        let debug_stdout_id = id.clone();
-        let debug_stderr_app = app.clone();
-        let debug_stderr_id = id.clone();
-
-        let on_stdout = move |line: &str| {
-            let _ = debug_stdout_app.emit(
-                "download-debug-line",
-                DebugLine {
-                    id: debug_stdout_id.clone(),
-                    stream: "stdout",
-                    text: line.to_string(),
-                },
-            );
-            let Some(caps) = progress_re.captures(line) else {
-                return;
-            };
-            let percent: f64 = caps
-                .get(1)
-                .and_then(|m| m.as_str().parse().ok())
-                .unwrap_or(0.0);
-            let now = Instant::now();
-            if now.duration_since(last_progress).as_millis() > PROGRESS_THROTTLE_MS
-                || percent == 100.0
-            {
-                let payload = DownloadProgress {
-                    id: progress_id.clone(),
-                    percent,
-                    speed: caps.get(2).map(|m| m.as_str().to_string()),
-                    eta: caps.get(3).map(|m| m.as_str().to_string()),
-                };
-                let _ = progress_app.emit("download-progress", payload);
-                last_progress = now;
-            }
-        };
-        let on_stderr = move |line: &str| {
-            let _ = debug_stderr_app.emit(
-                "download-debug-line",
-                DebugLine {
-                    id: debug_stderr_id.clone(),
-                    stream: "stderr",
-                    text: line.to_string(),
-                },
-            );
-        };
-
         // Checagem do limite e inserção sob o mesmo lock: sem isso, dois
         // starts simultâneos poderiam passar do teto de concorrência.
         let join = {
@@ -358,7 +299,7 @@ impl DownloadManager {
             if active.len() >= MAX_CONCURRENT_DOWNLOADS {
                 return Err("Limite de downloads simultâneos atingido".to_string());
             }
-            let (handle, join) = spawn_process(&ytdlp_bin, &args, None, on_stdout, on_stderr)?;
+            let (handle, join) = spawn_attempt(app, &ytdlp_bin, &args, &id)?;
             active.insert(id.clone(), handle);
             join
         };
@@ -375,10 +316,42 @@ impl DownloadManager {
                 .join()
                 .map_err(|_| "Erro interno ao aguardar processo".to_string())
                 .and_then(|r| r);
-            manager.active.lock().unwrap().remove(&finish_id);
+            let stderr_text = output.as_ref().ok().map(|o| o.stderr.clone());
 
             let was_cancelled = manager.cancelled.lock().unwrap().remove(&finish_id);
-            let (status, path, error) = final_status(output, was_cancelled, &output_dir);
+            let (mut status, mut path, mut error) = final_status(output, was_cancelled, &output_dir);
+
+            // YouTube às vezes exige prova de humano ("Sign in to confirm
+            // you're not a bot"). Sem retry, todo download falha até o
+            // usuário descobrir e digitar --cookies-from-browser manualmente
+            // no campo de argumentos extras — tenta uma vez sozinho antes de
+            // desistir, reaproveitando cookies do Chrome já logado.
+            if status == "failed"
+                && !cookies_already_set
+                && stderr_text.as_deref().is_some_and(is_bot_check_error)
+            {
+                log::info!(
+                    "Download {finish_id} bloqueado por verificação anti-bot, tentando novamente com cookies do navegador"
+                );
+                let retry_args = with_cookies_from_browser(&args, "chrome");
+                match spawn_attempt(&finish_app, &ytdlp_bin, &retry_args, &finish_id) {
+                    Ok((handle, retry_join)) => {
+                        manager.active.lock().unwrap().insert(finish_id.clone(), handle);
+                        let retry_output = retry_join
+                            .join()
+                            .map_err(|_| "Erro interno ao aguardar processo".to_string())
+                            .and_then(|r| r);
+                        let retry_cancelled = manager.cancelled.lock().unwrap().remove(&finish_id);
+                        let (s, p, e) = final_status(retry_output, retry_cancelled, &output_dir);
+                        status = s;
+                        path = p;
+                        error = e;
+                    }
+                    Err(e) => log::error!("Falha ao tentar novamente com cookies: {e}"),
+                }
+            }
+
+            manager.active.lock().unwrap().remove(&finish_id);
             match status {
                 "done" => log::info!("Download {finish_id} concluído: {output_dir}"),
                 "cancelled" => log::info!("Download {finish_id} cancelado pelo usuário"),
@@ -434,6 +407,101 @@ impl DownloadManager {
     }
 }
 
+/// Dispara uma tentativa de execução do yt-dlp: emite o comando pro painel de
+/// bastidores, liga os callbacks de progresso/log e chama spawn_process.
+/// Reaproveitado tanto na tentativa inicial quanto no retry com cookies.
+fn spawn_attempt(
+    app: &AppHandle,
+    ytdlp_bin: &str,
+    args: &[String],
+    id: &str,
+) -> Result<
+    (
+        ProcessHandle,
+        std::thread::JoinHandle<Result<crate::process_runner::ProcessOutput, String>>,
+    ),
+    String,
+> {
+    let _ = app.emit(
+        "download-debug-command",
+        DebugCommand {
+            id: id.to_string(),
+            command: format_command_for_display(ytdlp_bin, args),
+        },
+    );
+
+    let progress_re =
+        Regex::new(r"\[download\]\s+([\d.]+)%(?:.*?at\s+(\S+/s).*?ETA\s+([\d:]+))?").unwrap();
+    let progress_app = app.clone();
+    let progress_id = id.to_string();
+    let mut last_progress = Instant::now()
+        .checked_sub(Duration::from_millis(PROGRESS_THROTTLE_MS as u64 + 1))
+        .unwrap_or_else(Instant::now);
+
+    let debug_stdout_app = app.clone();
+    let debug_stdout_id = id.to_string();
+    let debug_stderr_app = app.clone();
+    let debug_stderr_id = id.to_string();
+
+    let on_stdout = move |line: &str| {
+        let _ = debug_stdout_app.emit(
+            "download-debug-line",
+            DebugLine {
+                id: debug_stdout_id.clone(),
+                stream: "stdout",
+                text: line.to_string(),
+            },
+        );
+        let Some(caps) = progress_re.captures(line) else {
+            return;
+        };
+        let percent: f64 = caps
+            .get(1)
+            .and_then(|m| m.as_str().parse().ok())
+            .unwrap_or(0.0);
+        let now = Instant::now();
+        if now.duration_since(last_progress).as_millis() > PROGRESS_THROTTLE_MS || percent == 100.0
+        {
+            let payload = DownloadProgress {
+                id: progress_id.clone(),
+                percent,
+                speed: caps.get(2).map(|m| m.as_str().to_string()),
+                eta: caps.get(3).map(|m| m.as_str().to_string()),
+            };
+            let _ = progress_app.emit("download-progress", payload);
+            last_progress = now;
+        }
+    };
+    let on_stderr = move |line: &str| {
+        let _ = debug_stderr_app.emit(
+            "download-debug-line",
+            DebugLine {
+                id: debug_stderr_id.clone(),
+                stream: "stderr",
+                text: line.to_string(),
+            },
+        );
+    };
+
+    spawn_process(ytdlp_bin, args, None, on_stdout, on_stderr)
+}
+
+/// yt-dlp usa essa mensagem fixa quando o YouTube exige prova de humano.
+/// --cookies-from-browser reaproveita a sessão já logada e resolve sozinho
+/// na maioria dos casos, sem o usuário precisar descobrir a flag manual.
+fn is_bot_check_error(stderr: &str) -> bool {
+    stderr.contains("Sign in to confirm you're not a bot")
+}
+
+fn with_cookies_from_browser(args: &[String], browser: &str) -> Vec<String> {
+    // url é sempre o último elemento (empurrado por último em start_download).
+    let mut retry = args[..args.len() - 1].to_vec();
+    retry.push("--cookies-from-browser".to_string());
+    retry.push(browser.to_string());
+    retry.push(args[args.len() - 1].clone());
+    retry
+}
+
 /// Traduz o resultado do processo pro status final do download:
 /// exit 0 → "done"; exit != 0 marcado como cancelado → "cancelled";
 /// exit != 0 espontâneo → "failed" com a mensagem classificada do stderr.
@@ -453,6 +521,30 @@ fn final_status(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn detects_bot_check_error() {
+        assert!(is_bot_check_error(
+            "ERROR: [youtube] xyz: Sign in to confirm you're not a bot. Use --cookies-from-browser..."
+        ));
+        assert!(!is_bot_check_error("ERROR: Video unavailable"));
+    }
+
+    #[test]
+    fn inserts_cookies_flag_before_trailing_url() {
+        let args = vec!["-f".to_string(), "best".to_string(), "https://x/y".to_string()];
+        let retry = with_cookies_from_browser(&args, "chrome");
+        assert_eq!(
+            retry,
+            vec![
+                "-f".to_string(),
+                "best".to_string(),
+                "--cookies-from-browser".to_string(),
+                "chrome".to_string(),
+                "https://x/y".to_string(),
+            ]
+        );
+    }
 
     #[test]
     fn extra_args_accepts_allowlisted_boolean_flag() {
