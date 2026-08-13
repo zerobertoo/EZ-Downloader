@@ -1,7 +1,7 @@
 {
   "name": "ez-downloader",
   "private": true,
-  "version": "2.2.2",
+  "version": "2.2.3",
   "description": "A user-friendly desktop application for downloading videos and audio from YouTube and other platforms using yt-dlp",
   "author": "zerobertoo",
   "license": "MIT",
