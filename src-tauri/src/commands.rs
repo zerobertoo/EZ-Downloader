@@ -1,4 +1,5 @@
-use crate::download_manager::{DownloadManager, DownloadOptions, DownloadResult, FormatsResult};
+use crate::download_manager::{DownloadManager, DownloadOptions, FormatsResult};
+use crate::history::HistoryEntry;
 use serde::Serialize;
 use tauri::{AppHandle, Manager, State};
 use tauri_plugin_dialog::DialogExt;
@@ -47,17 +48,20 @@ pub async fn get_formats(
 
 #[allow(clippy::too_many_arguments)]
 #[tauri::command]
-pub async fn start_download(
+pub fn start_download(
     app: AppHandle,
-    manager: State<'_, DownloadManager>,
+    manager: State<DownloadManager>,
     url: String,
     format: String,
     output_path: String,
+    title: Option<String>,
     section_start: Option<String>,
     section_end: Option<String>,
     sub_langs: Option<String>,
     extra_args: Option<String>,
-) -> Result<DownloadResult, String> {
+) -> Result<String, String> {
+    // Validações síncronas: erro aqui chega na hora pro frontend. Depois
+    // disso o download roda em background e o fim chega via "download-finished".
     if url.trim().is_empty() || format.trim().is_empty() || output_path.trim().is_empty() {
         return Err("URL, formato ou caminho de saída inválido".to_string());
     }
@@ -66,17 +70,22 @@ pub async fn start_download(
         sub_langs,
         extra_args,
     };
-    let manager = manager.inner().clone();
-    tauri::async_runtime::spawn_blocking(move || {
-        manager.download(&app, &url, &format, Some(output_path), options)
-    })
-    .await
-    .map_err(|e| e.to_string())?
+    manager.start_download(&app, &url, &format, title, Some(output_path), options)
 }
 
 #[tauri::command]
-pub fn cancel_download(manager: State<DownloadManager>) {
-    manager.cancel_download();
+pub fn cancel_download(manager: State<DownloadManager>, id: String) {
+    manager.cancel_download(&id);
+}
+
+#[tauri::command]
+pub fn get_history(manager: State<DownloadManager>) -> Vec<HistoryEntry> {
+    manager.history_entries()
+}
+
+#[tauri::command]
+pub fn clear_history(manager: State<DownloadManager>) {
+    manager.clear_history();
 }
 
 #[tauri::command]

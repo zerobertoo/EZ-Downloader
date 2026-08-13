@@ -2,6 +2,7 @@ mod commands;
 mod dependency_checker;
 mod download_manager;
 mod format_parser;
+mod history;
 mod paths;
 mod process_runner;
 mod ytdlp_updater;
@@ -223,7 +224,21 @@ pub fn run() {
                 .path()
                 .download_dir()
                 .unwrap_or_else(|_| std::path::PathBuf::from("."));
-            let manager = DownloadManager::new(ytdlp_bin, Some(ffmpeg_bin), default_download_path);
+            // Histórico persistente no diretório de dados do app.
+            let history_path = handle
+                .path()
+                .app_data_dir()
+                .map(|dir| {
+                    std::fs::create_dir_all(&dir).ok();
+                    dir.join("history.json")
+                })
+                .unwrap_or_else(|_| std::path::PathBuf::from("history.json"));
+            let manager = DownloadManager::new(
+                ytdlp_bin,
+                Some(ffmpeg_bin),
+                default_download_path,
+                history_path,
+            );
             app.manage(manager);
 
             let menu = build_menu(&handle)?;
@@ -264,6 +279,8 @@ pub fn run() {
             commands::get_formats,
             commands::start_download,
             commands::cancel_download,
+            commands::get_history,
+            commands::clear_history,
             commands::select_download_path,
             commands::get_downloads_path,
             commands::open_path,

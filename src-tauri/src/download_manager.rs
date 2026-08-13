@@ -1,16 +1,23 @@
 use crate::format_parser::{classify_ytdlp_error, parse_formats, FormatOption, YtdlpInfo};
+use crate::history::{HistoryEntry, HistoryStore};
 use crate::process_runner::{spawn_process, ProcessHandle};
 use regex::Regex;
 use serde::Serialize;
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 use tauri::{AppHandle, Emitter};
+use uuid::Uuid;
 
 const PROGRESS_THROTTLE_MS: u128 = 500;
 
+/// Máximo de downloads rodando ao mesmo tempo.
+const MAX_CONCURRENT_DOWNLOADS: usize = 3;
+
 #[derive(Debug, Serialize, Clone)]
 pub struct DownloadProgress {
+    pub id: String,
     pub percent: f64,
     pub speed: Option<String>,
     pub eta: Option<String>,
@@ -24,16 +31,26 @@ pub struct FormatsResult {
     pub uploader: Option<String>,
 }
 
-#[derive(Debug, Serialize)]
-pub struct DownloadResult {
-    pub path: String,
-    pub message: String,
+#[derive(Debug, Serialize, Clone)]
+pub struct DebugCommand {
+    pub id: String,
+    pub command: String,
 }
 
 #[derive(Debug, Serialize, Clone)]
 pub struct DebugLine {
+    pub id: String,
     pub stream: &'static str,
     pub text: String,
+}
+
+/// Resultado final de um download, emitido no evento "download-finished".
+#[derive(Debug, Serialize, Clone)]
+pub struct DownloadFinished {
+    pub id: String,
+    pub status: &'static str, // "done" | "failed" | "cancelled"
+    pub path: Option<String>,
+    pub error: Option<String>,
 }
 
 /// Opções do Modo Avançado — todas opcionais, ausentes no Modo Rápido.
@@ -50,7 +67,12 @@ pub struct DownloadManager {
     // clones anteriores do manager (State do Tauri) precisam enxergar a troca.
     ytdlp_bin: Arc<Mutex<String>>,
     ffmpeg_bin: Option<String>,
-    current_process: Arc<Mutex<Option<ProcessHandle>>>,
+    // Downloads em andamento, indexados pelo id gerado no start_download.
+    active: Arc<Mutex<HashMap<String, ProcessHandle>>>,
+    // Ids marcados como cancelados: permite distinguir "cancelled" de "failed"
+    // quando o processo termina com exit != 0.
+    cancelled: Arc<Mutex<HashSet<String>>>,
+    history: Arc<HistoryStore>,
     default_download_path: PathBuf,
 }
 
@@ -153,12 +175,15 @@ impl DownloadManager {
         ytdlp_bin: String,
         ffmpeg_bin: Option<String>,
         default_download_path: PathBuf,
+        history_path: PathBuf,
     ) -> Self {
         std::fs::create_dir_all(&default_download_path).ok();
         Self {
             ytdlp_bin: Arc::new(Mutex::new(ytdlp_bin)),
             ffmpeg_bin,
-            current_process: Arc::new(Mutex::new(None)),
+            active: Arc::new(Mutex::new(HashMap::new())),
+            cancelled: Arc::new(Mutex::new(HashSet::new())),
+            history: Arc::new(HistoryStore::new(history_path)),
             default_download_path,
         }
     }
@@ -206,21 +231,18 @@ impl DownloadManager {
         }
     }
 
-    pub fn download(
+    /// Valida e dispara um download em background, retornando o id na hora.
+    /// O fim (sucesso, falha ou cancelamento) é sinalizado só pelo evento
+    /// "download-finished" — ninguém aguarda o processo no comando.
+    pub fn start_download(
         &self,
         app: &AppHandle,
         url: &str,
         format: &str,
+        title: Option<String>,
         output_path: Option<String>,
         options: DownloadOptions,
-    ) -> Result<DownloadResult, String> {
-        {
-            let guard = self.current_process.lock().unwrap();
-            if guard.is_some() {
-                return Err("Um download já está em andamento".to_string());
-            }
-        }
-
+    ) -> Result<String, String> {
         let download_dir = output_path
             .map(PathBuf::from)
             .unwrap_or_else(|| self.default_download_path.clone());
@@ -259,30 +281,38 @@ impl DownloadManager {
         args.push(url.to_string());
 
         let ytdlp_bin = self.current_ytdlp_bin();
+        let id = Uuid::new_v4().to_string();
         log::info!(
-            "Iniciando download: url={url} formato={format} destino={}",
+            "Iniciando download {id}: url={url} formato={format} destino={}",
             download_dir.display()
         );
 
         let _ = app.emit(
             "download-debug-command",
-            format_command_for_display(&ytdlp_bin, &args),
+            DebugCommand {
+                id: id.clone(),
+                command: format_command_for_display(&ytdlp_bin, &args),
+            },
         );
 
         let progress_re =
             Regex::new(r"\[download\]\s+([\d.]+)%(?:.*?at\s+(\S+/s).*?ETA\s+([\d:]+))?").unwrap();
-        let app_handle = app.clone();
+        let progress_app = app.clone();
+        let progress_id = id.clone();
         let mut last_progress = Instant::now()
             .checked_sub(Duration::from_millis(PROGRESS_THROTTLE_MS as u64 + 1))
             .unwrap_or_else(Instant::now);
 
-        let debug_stdout_handle = app.clone();
-        let debug_stderr_handle = app.clone();
+        let debug_stdout_app = app.clone();
+        let debug_stdout_id = id.clone();
+        let debug_stderr_app = app.clone();
+        let debug_stderr_id = id.clone();
 
         let on_stdout = move |line: &str| {
-            let _ = debug_stdout_handle.emit(
+            let _ = debug_stdout_app.emit(
                 "download-debug-line",
                 DebugLine {
+                    id: debug_stdout_id.clone(),
                     stream: "stdout",
                     text: line.to_string(),
                 },
@@ -299,51 +329,122 @@ impl DownloadManager {
                 || percent == 100.0
             {
                 let payload = DownloadProgress {
+                    id: progress_id.clone(),
                     percent,
                     speed: caps.get(2).map(|m| m.as_str().to_string()),
                     eta: caps.get(3).map(|m| m.as_str().to_string()),
                 };
-                let _ = app_handle.emit("download-progress", payload);
+                let _ = progress_app.emit("download-progress", payload);
                 last_progress = now;
             }
         };
         let on_stderr = move |line: &str| {
-            let _ = debug_stderr_handle.emit(
+            let _ = debug_stderr_app.emit(
                 "download-debug-line",
                 DebugLine {
+                    id: debug_stderr_id.clone(),
                     stream: "stderr",
                     text: line.to_string(),
                 },
             );
         };
 
-        let (handle, join) = spawn_process(&ytdlp_bin, &args, None, on_stdout, on_stderr)?;
-        *self.current_process.lock().unwrap() = Some(handle);
+        // Checagem do limite e inserção sob o mesmo lock: sem isso, dois
+        // starts simultâneos poderiam passar do teto de concorrência.
+        let join = {
+            let mut active = self.active.lock().unwrap();
+            if active.len() >= MAX_CONCURRENT_DOWNLOADS {
+                return Err("Limite de downloads simultâneos atingido".to_string());
+            }
+            let (handle, join) = spawn_process(&ytdlp_bin, &args, None, on_stdout, on_stderr)?;
+            active.insert(id.clone(), handle);
+            join
+        };
 
-        let result = join
-            .join()
-            .map_err(|_| "Erro interno ao aguardar processo".to_string());
-        *self.current_process.lock().unwrap() = None;
+        // Thread que aguarda o fim do processo e emite "download-finished".
+        let manager = self.clone();
+        let finish_app = app.clone();
+        let finish_id = id.clone();
+        let url = url.to_string();
+        let format = format.to_string();
+        let output_dir = download_dir.to_string_lossy().to_string();
+        std::thread::spawn(move || {
+            let output = join
+                .join()
+                .map_err(|_| "Erro interno ao aguardar processo".to_string())
+                .and_then(|r| r);
+            manager.active.lock().unwrap().remove(&finish_id);
 
-        let output = result??;
-        if output.code == 0 {
-            log::info!("Download concluído: {}", download_dir.display());
-            Ok(DownloadResult {
-                path: download_dir.to_string_lossy().to_string(),
-                message: "Download concluído com sucesso".to_string(),
-            })
-        } else {
-            let message = classify_ytdlp_error(&output.stderr);
-            log::error!("Download falhou para {url}: {message}");
-            Err(message)
+            let was_cancelled = manager.cancelled.lock().unwrap().remove(&finish_id);
+            let (status, path, error) = final_status(output, was_cancelled, &output_dir);
+            match status {
+                "done" => log::info!("Download {finish_id} concluído: {output_dir}"),
+                "cancelled" => log::info!("Download {finish_id} cancelado pelo usuário"),
+                _ => log::error!(
+                    "Download {finish_id} falhou: {}",
+                    error.as_deref().unwrap_or("erro desconhecido")
+                ),
+            }
+
+            let _ = finish_app.emit(
+                "download-finished",
+                DownloadFinished {
+                    id: finish_id.clone(),
+                    status,
+                    path,
+                    error: error.clone(),
+                },
+            );
+            manager.history.append(HistoryEntry {
+                id: finish_id,
+                url,
+                title,
+                format,
+                output_path: output_dir,
+                status: status.to_string(),
+                error,
+                finished_at: chrono::Utc::now().to_rfc3339(),
+            });
+        });
+
+        Ok(id)
+    }
+
+    /// Cancela um download específico: marca o id pra diferenciar
+    /// "cancelled" de "failed" no encerramento e mata o processo.
+    /// A remoção de `active` e o evento download-finished ficam com a
+    /// thread que aguarda o processo — kill() é assíncrono.
+    pub fn cancel_download(&self, id: &str) {
+        let handle = self.active.lock().unwrap().get(id).cloned();
+        if let Some(handle) = handle {
+            self.cancelled.lock().unwrap().insert(id.to_string());
+            log::info!("Cancelando download {id} a pedido do usuário");
+            handle.kill();
         }
     }
 
-    pub fn cancel_download(&self) {
-        if let Some(handle) = self.current_process.lock().unwrap().take() {
-            log::info!("Download cancelado pelo usuário");
-            handle.kill();
-        }
+    pub fn history_entries(&self) -> Vec<HistoryEntry> {
+        self.history.entries()
+    }
+
+    pub fn clear_history(&self) {
+        self.history.clear();
+    }
+}
+
+/// Traduz o resultado do processo pro status final do download:
+/// exit 0 → "done"; exit != 0 marcado como cancelado → "cancelled";
+/// exit != 0 espontâneo → "failed" com a mensagem classificada do stderr.
+fn final_status(
+    output: Result<crate::process_runner::ProcessOutput, String>,
+    was_cancelled: bool,
+    output_dir: &str,
+) -> (&'static str, Option<String>, Option<String>) {
+    match output {
+        Ok(o) if o.code == 0 => ("done", Some(output_dir.to_string()), None),
+        Ok(_) if was_cancelled => ("cancelled", None, None),
+        Ok(o) => ("failed", None, Some(classify_ytdlp_error(&o.stderr))),
+        Err(e) => ("failed", None, Some(e)),
     }
 }
 
@@ -500,5 +601,50 @@ mod tests {
                 "0".to_string(),
             ]
         );
+    }
+
+    fn output(code: i32, stderr: &str) -> Result<crate::process_runner::ProcessOutput, String> {
+        Ok(crate::process_runner::ProcessOutput {
+            code,
+            stdout: String::new(),
+            stderr: stderr.to_string(),
+        })
+    }
+
+    #[test]
+    fn final_status_exit_zero_is_done_with_path() {
+        let (status, path, error) = final_status(output(0, ""), false, "/tmp/dl");
+        assert_eq!(status, "done");
+        assert_eq!(path, Some("/tmp/dl".to_string()));
+        assert_eq!(error, None);
+    }
+
+    #[test]
+    fn final_status_marked_cancelled_wins_over_nonzero_exit() {
+        let (status, path, error) = final_status(output(1, "boom"), true, "/tmp/dl");
+        assert_eq!(status, "cancelled");
+        assert_eq!(path, None);
+        assert_eq!(error, None);
+    }
+
+    #[test]
+    fn final_status_nonzero_exit_without_cancel_is_failed_with_classified_error() {
+        let (status, path, error) =
+            final_status(output(1, "ERROR: Video unavailable"), false, "/tmp/dl");
+        assert_eq!(status, "failed");
+        assert_eq!(path, None);
+        assert_eq!(
+            error,
+            Some(classify_ytdlp_error("ERROR: Video unavailable"))
+        );
+    }
+
+    #[test]
+    fn final_status_internal_error_is_failed() {
+        let (status, path, error) =
+            final_status(Err("falha interna".to_string()), false, "/tmp/dl");
+        assert_eq!(status, "failed");
+        assert_eq!(path, None);
+        assert_eq!(error, Some("falha interna".to_string()));
     }
 }

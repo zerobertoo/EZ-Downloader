@@ -979,6 +979,7 @@ dependencies = [
 name = "ez-downloader-tauri"
 version = "2.1.3"
 dependencies = [
+ "chrono",
  "log",
  "regex",
  "serde",
@@ -990,6 +991,7 @@ dependencies = [
  "tauri-plugin-opener",
  "tauri-plugin-updater",
  "ureq",
+ "uuid",
 ]
 
 [[package]]
