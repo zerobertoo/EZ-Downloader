@@ -58,3 +58,13 @@ pub fn get_ffmpeg_bin(app: &AppHandle) -> String {
     }
     resource_bin_path(app, "ffmpeg")
 }
+
+/// QuickJS-ng embutido — sem ele o yt-dlp não consegue gerar o PO Token do
+/// YouTube (precisa de deno/node/bun/quickjs; nenhum vem instalado por padrão
+/// no SO do usuário) e o download é cortado no meio com HTTP 403.
+pub fn get_qjs_bin(app: &AppHandle) -> String {
+    if cfg!(debug_assertions) {
+        return "qjs".to_string();
+    }
+    resource_bin_path(app, "qjs")
+}

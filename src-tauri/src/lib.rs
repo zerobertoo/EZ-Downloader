@@ -202,6 +202,12 @@ pub fn run() {
 
             let ytdlp_bin = paths::get_ytdlp_bin(&handle);
             let ffmpeg_bin = paths::get_ffmpeg_bin(&handle);
+            // Só usa o QuickJS se o binário embutido realmente existir — em dev
+            // (sem bundle) ou se o download de CI falhar, segue sem PO Token em
+            // vez de passar --js-runtimes apontando pra um caminho inexistente.
+            let qjs_bin = paths::get_qjs_bin(&handle);
+            let qjs_bin = std::path::Path::new(&qjs_bin).exists().then_some(qjs_bin);
+            log::info!("QuickJS (PO Token): {}", if qjs_bin.is_some() { "ok" } else { "ausente" });
 
             let deps = check_dependencies(&ytdlp_bin, &ffmpeg_bin);
             log::info!(
@@ -244,6 +250,7 @@ pub fn run() {
             let manager = DownloadManager::new(
                 ytdlp_bin,
                 Some(ffmpeg_bin),
+                qjs_bin,
                 default_download_path,
                 history_path,
             );

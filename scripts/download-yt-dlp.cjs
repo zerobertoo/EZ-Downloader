@@ -22,6 +22,15 @@ const FFMPEG_ASSETS = {
   linux:  { filename: 'ffmpeg',     asset: 'ffmpeg-linux-x64'     },
 };
 
+// QuickJS-ng: runtime JS que o yt-dlp usa pra gerar o PO Token do YouTube.
+// Sem ele o download de vídeos populares é cortado no meio com HTTP 403
+// (reproduzido — ver comentário em src-tauri/src/download_manager.rs).
+const QJS_ASSETS = {
+  win32:  { filename: 'qjs.exe', asset: 'qjs-windows-x86_64.exe' },
+  darwin: { filename: 'qjs',     asset: 'qjs-darwin-x86_64'      },
+  linux:  { filename: 'qjs',     asset: 'qjs-linux-x86_64'       },
+};
+
 function httpsGet(url, options = {}) {
   return new Promise((resolve, reject) => {
     const headers = { 'User-Agent': 'ez-downloader/1.0' };
@@ -105,6 +114,7 @@ async function main() {
 
   await downloadBinary('yt-dlp', 'yt-dlp/yt-dlp', YTDLP_ASSETS, platforms);
   await downloadBinary('ffmpeg', 'eugeneware/ffmpeg-static', FFMPEG_ASSETS, platforms);
+  await downloadBinary('quickjs', 'quickjs-ng/quickjs', QJS_ASSETS, platforms);
 }
 
 main().catch((err) => {

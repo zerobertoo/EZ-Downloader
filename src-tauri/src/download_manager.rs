@@ -68,6 +68,7 @@ pub struct DownloadManager {
     // clones anteriores do manager (State do Tauri) precisam enxergar a troca.
     ytdlp_bin: Arc<Mutex<String>>,
     ffmpeg_bin: Option<String>,
+    qjs_bin: Option<String>,
     // Downloads em andamento, indexados pelo id gerado no start_download.
     active: Arc<Mutex<HashMap<String, ProcessHandle>>>,
     // Ids marcados como cancelados: permite distinguir "cancelled" de "failed"
@@ -171,31 +172,42 @@ fn quick_download_args(mode: &str) -> Vec<String> {
     }
 }
 
-/// Componente JS remoto (EJS) que o yt-dlp baixa e roda sozinho (sem Python/Node
-/// do usuário) para resolver os desafios de assinatura do YouTube. Sem isso,
-/// alguns clientes retornam URLs de mídia que dão HTTP 403 no download mesmo com
-/// os formatos listados normalmente — reproduzido manualmente com
-/// `--remote-components ejs:github` antes de reportar sucesso.
+/// Componente JS remoto (EJS) que o yt-dlp baixa pra resolver os desafios de
+/// assinatura do YouTube — mas só *baixar* o componente não basta, ele precisa
+/// de um runtime JS pra *executar* (deno/node/bun/quickjs; nenhum vem
+/// instalado por padrão no SO do usuário). Sem runtime, o yt-dlp não gera o
+/// PO Token do YouTube e cai num cliente (android_vr) cuja URL de mídia é
+/// aceita no início mas cortada com HTTP 403 no meio do download — reproduzido
+/// manualmente: log real de usuário mostrava "PO Token Providers: none" e
+/// corte em ~16% de um download de 725MB. QuickJS-ng é embutido no bundle
+/// (resources/bin/<plataforma>/qjs) especificamente pra preencher essa lacuna.
 const EJS_ARGS: [&str; 2] = ["--remote-components", "ejs:github"];
+const JS_RUNTIME_FLAG: &str = "--js-runtimes";
 
-fn push_ejs_args(args: &mut Vec<String>) {
+fn push_ejs_args(args: &mut Vec<String>, qjs_bin: Option<&str>) {
     args.push(EJS_ARGS[0].to_string());
     args.push(EJS_ARGS[1].to_string());
+    if let Some(qjs_bin) = qjs_bin {
+        args.push(JS_RUNTIME_FLAG.to_string());
+        args.push(format!("quickjs:{qjs_bin}"));
+    }
 }
 
 /// True só quando o binário de yt-dlp em uso é velho demais pra conhecer
-/// `--remote-components` (argparse rejeita a flag antes de tentar baixar nada).
-/// O app se auto-atualiza no startup, mas se essa atualização falhar (rede
-/// indisponível) o binário embutido mais antigo não pode travar todo download.
+/// `--remote-components`/`--js-runtimes` (argparse rejeita a flag antes de
+/// tentar baixar nada). O app se auto-atualiza no startup, mas se essa
+/// atualização falhar (rede indisponível) o binário embutido mais antigo não
+/// pode travar todo download.
 fn is_unrecognized_remote_components_error(stderr: &str) -> bool {
-    stderr.contains("unrecognized arguments") && stderr.contains("--remote-components")
+    (stderr.contains("unrecognized arguments") && stderr.contains("--remote-components"))
+        || (stderr.contains("unrecognized arguments") && stderr.contains(JS_RUNTIME_FLAG))
 }
 
 fn without_remote_components(args: &[String]) -> Vec<String> {
     let mut result = Vec::with_capacity(args.len());
     let mut i = 0;
     while i < args.len() {
-        if args[i] == EJS_ARGS[0] {
+        if args[i] == EJS_ARGS[0] || args[i] == JS_RUNTIME_FLAG {
             i += 2;
         } else {
             result.push(args[i].clone());
@@ -209,6 +221,7 @@ impl DownloadManager {
     pub fn new(
         ytdlp_bin: String,
         ffmpeg_bin: Option<String>,
+        qjs_bin: Option<String>,
         default_download_path: PathBuf,
         history_path: PathBuf,
     ) -> Self {
@@ -216,6 +229,7 @@ impl DownloadManager {
         Self {
             ytdlp_bin: Arc::new(Mutex::new(ytdlp_bin)),
             ffmpeg_bin,
+            qjs_bin,
             active: Arc::new(Mutex::new(HashMap::new())),
             cancelled: Arc::new(Mutex::new(HashSet::new())),
             history: Arc::new(HistoryStore::new(history_path)),
@@ -233,7 +247,7 @@ impl DownloadManager {
 
     pub fn get_available_formats(&self, url: &str) -> Result<FormatsResult, String> {
         let mut args = vec!["--dump-json".to_string(), "--no-warnings".to_string()];
-        push_ejs_args(&mut args);
+        push_ejs_args(&mut args, self.qjs_bin.as_deref());
         args.push(url.to_string());
         let ytdlp_bin = self.current_ytdlp_bin();
         let output = run_probe(&ytdlp_bin, &args)?;
@@ -296,7 +310,7 @@ impl DownloadManager {
                 a
             }
         };
-        push_ejs_args(&mut args);
+        push_ejs_args(&mut args, self.qjs_bin.as_deref());
         if let Some((start, end)) = &options.section {
             args.extend(section_arg(start, end));
         }
@@ -356,13 +370,17 @@ impl DownloadManager {
             let mut stderr_text = output.as_ref().ok().map(|o| o.stderr.clone());
 
             let was_cancelled = manager.cancelled.lock().unwrap().remove(&finish_id);
-            let (mut status, mut path, mut error) = final_status(output, was_cancelled, &output_dir);
+            let (mut status, mut path, mut error) =
+                final_status(output, was_cancelled, &output_dir);
             let mut current_args = args;
 
             // Binário de yt-dlp desatualizado (auto-update falhou) não conhece
             // --remote-components ainda: reexecuta sem a flag em vez de deixar
             // todo download quebrar por causa de uma flag opcional.
-            if status == "failed" && stderr_text.as_deref().is_some_and(is_unrecognized_remote_components_error)
+            if status == "failed"
+                && stderr_text
+                    .as_deref()
+                    .is_some_and(is_unrecognized_remote_components_error)
             {
                 log::info!(
                     "Download {finish_id}: binário de yt-dlp não suporta --remote-components, tentando sem EJS"
@@ -370,7 +388,11 @@ impl DownloadManager {
                 current_args = without_remote_components(&current_args);
                 match spawn_attempt(&finish_app, &ytdlp_bin, &current_args, &finish_id) {
                     Ok((handle, retry_join)) => {
-                        manager.active.lock().unwrap().insert(finish_id.clone(), handle);
+                        manager
+                            .active
+                            .lock()
+                            .unwrap()
+                            .insert(finish_id.clone(), handle);
                         let retry_output = retry_join
                             .join()
                             .map_err(|_| "Erro interno ao aguardar processo".to_string())
@@ -387,7 +409,8 @@ impl DownloadManager {
             }
 
             // YouTube às vezes exige prova de humano ("Sign in to confirm
-            // you're not a bot"). Sem retry, todo download falha até o
+            // you're not a bot") ou corta o download no meio com HTTP 403
+            // (PO Token ausente). Sem retry, todo download falha até o
             // usuário descobrir e digitar --cookies-from-browser manualmente
             // no campo de argumentos extras — tenta uma vez sozinho antes de
             // desistir, reaproveitando cookies do Chrome já logado.
@@ -396,12 +419,16 @@ impl DownloadManager {
                 && stderr_text.as_deref().is_some_and(is_bot_check_error)
             {
                 log::info!(
-                    "Download {finish_id} bloqueado por verificação anti-bot, tentando novamente com cookies do navegador"
+                    "Download {finish_id} bloqueado (anti-bot ou 403), tentando novamente com cookies do navegador"
                 );
                 let retry_args = with_cookies_from_browser(&current_args, "chrome");
                 match spawn_attempt(&finish_app, &ytdlp_bin, &retry_args, &finish_id) {
                     Ok((handle, retry_join)) => {
-                        manager.active.lock().unwrap().insert(finish_id.clone(), handle);
+                        manager
+                            .active
+                            .lock()
+                            .unwrap()
+                            .insert(finish_id.clone(), handle);
                         let retry_output = retry_join
                             .join()
                             .map_err(|_| "Erro interno ao aguardar processo".to_string())
@@ -429,9 +456,18 @@ impl DownloadManager {
             // Downloads levam minutos — sem isso, quem troca de janela só
             // descobre que terminou voltando pro app manualmente.
             if status != "cancelled" {
-                let notif_title = if status == "done" { "Download concluído" } else { "Download falhou" };
+                let notif_title = if status == "done" {
+                    "Download concluído"
+                } else {
+                    "Download falhou"
+                };
                 let body = title.as_deref().unwrap_or(url.as_str());
-                let _ = finish_app.notification().builder().title(notif_title).body(body).show();
+                let _ = finish_app
+                    .notification()
+                    .builder()
+                    .title(notif_title)
+                    .body(body)
+                    .show();
             }
 
             let _ = finish_app.emit(
@@ -483,12 +519,25 @@ impl DownloadManager {
 /// Roda uma consulta síncrona (sem streaming de progresso, ex: --dump-json)
 /// com fallback automático se o binário for velho demais pro --remote-components.
 fn run_probe(ytdlp_bin: &str, args: &[String]) -> Result<ProcessOutput, String> {
-    let (_, join) = spawn_process(ytdlp_bin, args, Some(Duration::from_secs(30)), |_| {}, |_| {})?;
+    let started = Instant::now();
+    let (_, join) = spawn_process(
+        ytdlp_bin,
+        args,
+        Some(Duration::from_secs(30)),
+        |_| {},
+        |_| {},
+    )?;
     let output = join
         .join()
         .map_err(|_| "Erro interno ao aguardar processo".to_string())??;
+    log::info!(
+        "run_probe levou {:.2?} (code={})",
+        started.elapsed(),
+        output.code
+    );
 
     if output.code != 0 && is_unrecognized_remote_components_error(&output.stderr) {
+        let fallback_started = Instant::now();
         let fallback_args = without_remote_components(args);
         let (_, join) = spawn_process(
             ytdlp_bin,
@@ -497,9 +546,15 @@ fn run_probe(ytdlp_bin: &str, args: &[String]) -> Result<ProcessOutput, String> 
             |_| {},
             |_| {},
         )?;
-        return join
+        let fallback_output = join
             .join()
-            .map_err(|_| "Erro interno ao aguardar processo".to_string())?;
+            .map_err(|_| "Erro interno ao aguardar processo".to_string())??;
+        log::info!(
+            "run_probe (fallback sem remote-components) levou {:.2?} (code={})",
+            fallback_started.elapsed(),
+            fallback_output.code
+        );
+        return Ok(fallback_output);
     }
     Ok(output)
 }
@@ -583,11 +638,13 @@ fn spawn_attempt(
     spawn_process(ytdlp_bin, args, None, on_stdout, on_stderr)
 }
 
-/// yt-dlp usa essa mensagem fixa quando o YouTube exige prova de humano.
-/// --cookies-from-browser reaproveita a sessão já logada e resolve sozinho
-/// na maioria dos casos, sem o usuário precisar descobrir a flag manual.
+/// Casos em que --cookies-from-browser (sessão já logada) costuma resolver
+/// sozinho: a mensagem fixa de "prova de humano" do YouTube, e o HTTP 403 que
+/// aparece no meio de um download grande — sintoma de PO Token ausente (ver
+/// comentário de EJS_ARGS acima; o app ainda não gera PO Token de verdade,
+/// só cookies de uma conta logada contornam esse corte de forma confiável).
 fn is_bot_check_error(stderr: &str) -> bool {
-    stderr.contains("Sign in to confirm you're not a bot")
+    stderr.contains("Sign in to confirm you're not a bot") || stderr.contains("HTTP Error 403")
 }
 
 fn with_cookies_from_browser(args: &[String], browser: &str) -> Vec<String> {
@@ -628,8 +685,19 @@ mod tests {
     }
 
     #[test]
+    fn detects_mid_download_403_as_cookies_retryable() {
+        assert!(is_bot_check_error(
+            "ERROR: unable to download video data: HTTP Error 403: Forbidden"
+        ));
+    }
+
+    #[test]
     fn inserts_cookies_flag_before_trailing_url() {
-        let args = vec!["-f".to_string(), "best".to_string(), "https://x/y".to_string()];
+        let args = vec![
+            "-f".to_string(),
+            "best".to_string(),
+            "https://x/y".to_string(),
+        ];
         let retry = with_cookies_from_browser(&args, "chrome");
         assert_eq!(
             retry,
@@ -780,7 +848,7 @@ mod tests {
     #[test]
     fn ejs_args_are_appended_and_removable() {
         let mut args = vec!["-f".to_string(), "best".to_string()];
-        push_ejs_args(&mut args);
+        push_ejs_args(&mut args, None);
         assert_eq!(
             args,
             vec![
@@ -788,6 +856,27 @@ mod tests {
                 "best".to_string(),
                 "--remote-components".to_string(),
                 "ejs:github".to_string(),
+            ]
+        );
+        assert_eq!(
+            without_remote_components(&args),
+            vec!["-f".to_string(), "best".to_string()]
+        );
+    }
+
+    #[test]
+    fn ejs_args_include_js_runtime_when_qjs_bin_is_set() {
+        let mut args = vec!["-f".to_string(), "best".to_string()];
+        push_ejs_args(&mut args, Some("/path/to/qjs"));
+        assert_eq!(
+            args,
+            vec![
+                "-f".to_string(),
+                "best".to_string(),
+                "--remote-components".to_string(),
+                "ejs:github".to_string(),
+                "--js-runtimes".to_string(),
+                "quickjs:/path/to/qjs".to_string(),
             ]
         );
         assert_eq!(

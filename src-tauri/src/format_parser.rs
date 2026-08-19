@@ -145,7 +145,7 @@ pub fn classify_ytdlp_error(stderr: &str) -> String {
         return "Erro ao processar o vídeo: ffmpeg não encontrado.".to_string();
     }
     if stderr.contains("HTTP Error 403") {
-        return "O YouTube bloqueou este download (Erro 403). O app já tenta resolver isso automaticamente; se persistir, atualize o yt-dlp pelo menu Ajuda → Atualizar yt-dlp e tente de novo.".to_string();
+        return "O YouTube bloqueou este download (Erro 403). O app já tenta de novo automaticamente usando os cookies do Chrome; se persistir, faça login no YouTube pelo Chrome e tente de novo.".to_string();
     }
     if stderr.contains("nsig extraction failed")
         || stderr.contains("Unable to obtain nsig")
@@ -349,13 +349,16 @@ mod tests {
 
     #[test]
     fn classifies_http_403() {
-        let msg = classify_ytdlp_error("ERROR: unable to download video data: HTTP Error 403: Forbidden");
+        let msg =
+            classify_ytdlp_error("ERROR: unable to download video data: HTTP Error 403: Forbidden");
         assert!(msg.contains("403"));
     }
 
     #[test]
     fn classifies_nsig_failure() {
-        assert!(classify_ytdlp_error("ERROR: [youtube] Unable to obtain nsig").contains("segurança"));
+        assert!(
+            classify_ytdlp_error("ERROR: [youtube] Unable to obtain nsig").contains("segurança")
+        );
     }
 
     #[test]
