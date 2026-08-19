@@ -5,8 +5,6 @@ pub struct YtdlpFormat {
     pub format_id: Option<String>,
     pub ext: Option<String>,
     pub height: Option<i64>,
-    pub width: Option<i64>,
-    pub fps: Option<f64>,
     pub vcodec: Option<String>,
     pub acodec: Option<String>,
     pub filesize: Option<i64>,
@@ -56,14 +54,33 @@ fn best_option() -> FormatOption {
     }
 }
 
+/// Formato de vídeo é sempre um seletor genérico por altura (`bv*[height<=H]+ba/b`),
+/// nunca um format_id específico: os ids do YouTube variam por cliente/codec/
+/// disponibilidade (ex: 137, 399), então travar num id concreto quebra assim que
+/// o YouTube deixa de oferecer aquele stream para o cliente que o yt-dlp escolher.
+/// O seletor também garante vídeo+áudio sempre juntos — um format_id de vídeo puro
+/// (sem áudio) baixado sozinho gerava arquivo mudo.
+fn resolution_option(height: i64) -> FormatOption {
+    FormatOption {
+        id: format!("bv*[height<={height}]+ba/b"),
+        kind: "combined".to_string(),
+        label: format!("MP4 - {height}p (Vídeo + Áudio)"),
+        ext: "mp4".to_string(),
+        height: Some(height),
+        width: None,
+        fps: None,
+        abr: None,
+        filesize: None,
+    }
+}
+
 pub fn parse_formats(info: &YtdlpInfo) -> Vec<FormatOption> {
     let formats = match &info.formats {
         Some(f) if !f.is_empty() => f,
         _ => return vec![best_option()],
     };
 
-    let mut combined: Vec<(String, FormatOption)> = Vec::new();
-    let mut video: Vec<(String, FormatOption)> = Vec::new();
+    let mut heights: Vec<i64> = Vec::new();
     let mut audio: Vec<(String, FormatOption)> = Vec::new();
 
     for f in formats {
@@ -72,46 +89,15 @@ pub fn parse_formats(info: &YtdlpInfo) -> Vec<FormatOption> {
         };
         let vcodec = f.vcodec.as_deref().unwrap_or("none");
         let acodec = f.acodec.as_deref().unwrap_or("none");
-        let ext = f.ext.clone().unwrap_or_else(|| "mp4".to_string());
-        let height = f.height.unwrap_or(0);
 
-        if vcodec != "none" && acodec != "none" {
-            let key = format!("{ext}-{height}p");
-            if !combined.iter().any(|(k, _)| k == &key) {
-                combined.push((
-                    key,
-                    FormatOption {
-                        id: format_id.clone(),
-                        kind: "combined".to_string(),
-                        label: format!("{} - {}p (Vídeo + Áudio)", ext.to_uppercase(), height),
-                        ext,
-                        height: Some(height),
-                        width: f.width,
-                        fps: f.fps,
-                        abr: None,
-                        filesize: f.filesize,
-                    },
-                ));
+        if vcodec != "none" {
+            if let Some(height) = f.height {
+                if height > 0 && !heights.contains(&height) {
+                    heights.push(height);
+                }
             }
-        } else if vcodec != "none" && acodec == "none" {
-            let key = format!("{ext}-{height}p");
-            if !video.iter().any(|(k, _)| k == &key) {
-                video.push((
-                    key,
-                    FormatOption {
-                        id: format_id.clone(),
-                        kind: "video".to_string(),
-                        label: format!("{} - {}p (Vídeo)", ext.to_uppercase(), height),
-                        ext,
-                        height: Some(height),
-                        width: f.width,
-                        fps: f.fps,
-                        abr: None,
-                        filesize: f.filesize,
-                    },
-                ));
-            }
-        } else if acodec != "none" && vcodec == "none" {
+        } else if acodec != "none" {
+            let ext = f.ext.clone().unwrap_or_else(|| "m4a".to_string());
             let abr_key = f
                 .abr
                 .map(|a| a.to_string())
@@ -140,9 +126,10 @@ pub fn parse_formats(info: &YtdlpInfo) -> Vec<FormatOption> {
         }
     }
 
+    heights.sort_unstable_by(|a, b| b.cmp(a));
+
     let mut result = vec![best_option()];
-    result.extend(combined.into_iter().map(|(_, v)| v));
-    result.extend(video.into_iter().map(|(_, v)| v));
+    result.extend(heights.into_iter().map(resolution_option));
     result.extend(audio.into_iter().map(|(_, v)| v));
     result
 }
@@ -156,6 +143,15 @@ pub fn classify_ytdlp_error(stderr: &str) -> String {
     }
     if stderr.contains("not installed") {
         return "Erro ao processar o vídeo: ffmpeg não encontrado.".to_string();
+    }
+    if stderr.contains("HTTP Error 403") {
+        return "O YouTube bloqueou este download (Erro 403). O app já tenta resolver isso automaticamente; se persistir, atualize o yt-dlp pelo menu Ajuda → Atualizar yt-dlp e tente de novo.".to_string();
+    }
+    if stderr.contains("nsig extraction failed")
+        || stderr.contains("Unable to obtain nsig")
+        || stderr.contains("Some formats are possibly damaged")
+    {
+        return "Falha ao resolver o desafio de segurança do YouTube (assinatura). Verifique sua conexão com a internet — o resolvedor é baixado automaticamente na primeira execução — e tente novamente.".to_string();
     }
     if stderr.contains("Unable to extract") {
         return "Não foi possível processar a URL.".to_string();
@@ -178,8 +174,6 @@ mod tests {
             format_id: Some(id.to_string()),
             ext: Some(ext.to_string()),
             height: Some(height),
-            width: Some(height * 16 / 9),
-            fps: Some(30.0),
             vcodec: Some("avc1".to_string()),
             acodec: Some("mp4a".to_string()),
             filesize: Some(50_000_000),
@@ -192,8 +186,6 @@ mod tests {
             format_id: Some(id.to_string()),
             ext: Some(ext.to_string()),
             height: Some(height),
-            width: Some(height * 16 / 9),
-            fps: Some(30.0),
             vcodec: Some("vp9".to_string()),
             acodec: Some("none".to_string()),
             filesize: Some(40_000_000),
@@ -206,8 +198,6 @@ mod tests {
             format_id: Some(id.to_string()),
             ext: Some(ext.to_string()),
             height: None,
-            width: None,
-            fps: None,
             vcodec: Some("none".to_string()),
             acodec: Some("opus".to_string()),
             filesize: Some(5_000_000),
@@ -254,11 +244,14 @@ mod tests {
     }
 
     #[test]
-    fn deduplicates_combined_formats_by_ext_and_resolution() {
+    fn deduplicates_combined_and_video_only_formats_at_the_same_height() {
+        // 22 (combined) and 137/399 (video-only, different codecs) all sit at
+        // 1080p — should collapse into a single generic resolution entry, not
+        // one per underlying format_id/codec.
         let formats = vec![
             combined_format("22", "mp4", 720),
-            combined_format("23", "mp4", 720),
-            combined_format("137", "mp4", 1080),
+            video_format("137", "mp4", 1080),
+            video_format("399", "mp4", 1080),
         ];
         let result = parse_formats(&info_with(formats));
         let combined: Vec<_> = result.iter().filter(|f| f.kind == "combined").collect();
@@ -266,14 +259,14 @@ mod tests {
     }
 
     #[test]
-    fn deduplicates_video_only_formats_by_ext_and_resolution() {
-        let formats = vec![
-            video_format("248", "webm", 1080),
-            video_format("249", "webm", 1080),
-        ];
-        let result = parse_formats(&info_with(formats));
-        let videos: Vec<_> = result.iter().filter(|f| f.kind == "video").collect();
-        assert_eq!(videos.len(), 1);
+    fn resolution_entries_use_a_generic_height_capped_selector_not_a_specific_format_id() {
+        // Regression: picking a raw video-only format_id (e.g. "137") downloads
+        // video with no audio track, and hardcoding ids breaks once YouTube
+        // stops offering that exact id for the client yt-dlp picks.
+        let result = parse_formats(&info_with(vec![video_format("137", "mp4", 1080)]));
+        let entry = result.iter().find(|f| f.height == Some(1080)).unwrap();
+        assert_eq!(entry.id, "bv*[height<=1080]+ba/b");
+        assert_eq!(entry.kind, "combined");
     }
 
     #[test]
@@ -288,7 +281,7 @@ mod tests {
     }
 
     #[test]
-    fn orders_best_combined_video_audio() {
+    fn orders_best_then_resolutions_descending_then_audio() {
         let formats = vec![
             audio_format("140", "m4a", 128.0),
             video_format("248", "webm", 1080),
@@ -298,36 +291,29 @@ mod tests {
         let kinds: Vec<_> = result.iter().map(|f| f.kind.as_str()).collect();
         assert_eq!(kinds[0], "best");
         let combined_idx = kinds.iter().position(|k| *k == "combined").unwrap();
-        let video_idx = kinds.iter().position(|k| *k == "video").unwrap();
         let audio_idx = kinds.iter().position(|k| *k == "audio").unwrap();
-        assert!(combined_idx < video_idx);
-        assert!(video_idx < audio_idx);
-    }
-
-    #[test]
-    fn includes_filesize_in_format_objects() {
-        let result = parse_formats(&info_with(vec![combined_format("22", "mp4", 720)]));
-        let combined = result.iter().find(|f| f.kind == "combined").unwrap();
-        assert_eq!(combined.filesize, Some(50_000_000));
+        assert!(combined_idx < audio_idx);
+        assert_eq!(result[1].height, Some(1080));
+        assert_eq!(result[2].height, Some(720));
     }
 
     #[test]
     fn skips_formats_without_format_id() {
         let mut no_id = combined_format("22", "mp4", 720);
         no_id.format_id = None;
-        let formats = vec![no_id, combined_format("22", "mp4", 720)];
+        let formats = vec![no_id];
         let result = parse_formats(&info_with(formats));
         let combined: Vec<_> = result.iter().filter(|f| f.kind == "combined").collect();
-        assert_eq!(combined.len(), 1);
+        assert_eq!(combined.len(), 0);
     }
 
     #[test]
-    fn uses_zero_height_fallback_when_height_is_null() {
+    fn skips_video_formats_with_null_or_zero_height() {
         let mut format = combined_format("22", "mp4", 720);
         format.height = None;
         let result = parse_formats(&info_with(vec![format]));
-        let combined = result.iter().find(|f| f.kind == "combined").unwrap();
-        assert_eq!(combined.height, Some(0));
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].id, "best");
     }
 
     #[test]
@@ -359,6 +345,17 @@ mod tests {
     #[test]
     fn classifies_unable_to_extract() {
         assert!(classify_ytdlp_error("Unable to extract video data").contains("processar"));
+    }
+
+    #[test]
+    fn classifies_http_403() {
+        let msg = classify_ytdlp_error("ERROR: unable to download video data: HTTP Error 403: Forbidden");
+        assert!(msg.contains("403"));
+    }
+
+    #[test]
+    fn classifies_nsig_failure() {
+        assert!(classify_ytdlp_error("ERROR: [youtube] Unable to obtain nsig").contains("segurança"));
     }
 
     #[test]

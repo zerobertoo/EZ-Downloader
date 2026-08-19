@@ -1,6 +1,6 @@
 use crate::format_parser::{classify_ytdlp_error, parse_formats, FormatOption, YtdlpInfo};
 use crate::history::{HistoryEntry, HistoryStore};
-use crate::process_runner::{spawn_process, ProcessHandle};
+use crate::process_runner::{spawn_process, ProcessHandle, ProcessOutput};
 use regex::Regex;
 use serde::Serialize;
 use std::collections::{HashMap, HashSet};
@@ -163,11 +163,45 @@ fn quick_download_args(mode: &str) -> Vec<String> {
     } else {
         vec![
             "-f".to_string(),
-            "bestvideo+bestaudio/best".to_string(),
+            "bv*+ba/b".to_string(),
             "--merge-output-format".to_string(),
             "mp4".to_string(),
         ]
     }
+}
+
+/// Componente JS remoto (EJS) que o yt-dlp baixa e roda sozinho (sem Python/Node
+/// do usuário) para resolver os desafios de assinatura do YouTube. Sem isso,
+/// alguns clientes retornam URLs de mídia que dão HTTP 403 no download mesmo com
+/// os formatos listados normalmente — reproduzido manualmente com
+/// `--remote-components ejs:github` antes de reportar sucesso.
+const EJS_ARGS: [&str; 2] = ["--remote-components", "ejs:github"];
+
+fn push_ejs_args(args: &mut Vec<String>) {
+    args.push(EJS_ARGS[0].to_string());
+    args.push(EJS_ARGS[1].to_string());
+}
+
+/// True só quando o binário de yt-dlp em uso é velho demais pra conhecer
+/// `--remote-components` (argparse rejeita a flag antes de tentar baixar nada).
+/// O app se auto-atualiza no startup, mas se essa atualização falhar (rede
+/// indisponível) o binário embutido mais antigo não pode travar todo download.
+fn is_unrecognized_remote_components_error(stderr: &str) -> bool {
+    stderr.contains("unrecognized arguments") && stderr.contains("--remote-components")
+}
+
+fn without_remote_components(args: &[String]) -> Vec<String> {
+    let mut result = Vec::with_capacity(args.len());
+    let mut i = 0;
+    while i < args.len() {
+        if args[i] == EJS_ARGS[0] {
+            i += 2;
+        } else {
+            result.push(args[i].clone());
+            i += 1;
+        }
+    }
+    result
 }
 
 impl DownloadManager {
@@ -197,22 +231,11 @@ impl DownloadManager {
     }
 
     pub fn get_available_formats(&self, url: &str) -> Result<FormatsResult, String> {
-        let args = vec![
-            "--dump-json".to_string(),
-            "--no-warnings".to_string(),
-            url.to_string(),
-        ];
+        let mut args = vec!["--dump-json".to_string(), "--no-warnings".to_string()];
+        push_ejs_args(&mut args);
+        args.push(url.to_string());
         let ytdlp_bin = self.current_ytdlp_bin();
-        let (_, join) = spawn_process(
-            &ytdlp_bin,
-            &args,
-            Some(Duration::from_secs(30)),
-            |_| {},
-            |_| {},
-        )?;
-        let output = join
-            .join()
-            .map_err(|_| "Erro interno ao aguardar processo".to_string())??;
+        let output = run_probe(&ytdlp_bin, &args)?;
 
         if output.code == 0 {
             let info: YtdlpInfo = serde_json::from_str(&output.stdout)
@@ -253,13 +276,26 @@ impl DownloadManager {
             "quick-mp3" => quick_download_args("mp3"),
             "quick-mp4" => quick_download_args("mp4"),
             "best" => {
-                let mut a = vec!["-f".to_string(), "bestvideo+bestaudio/best".to_string()];
-                a.push("--merge-output-format".to_string());
-                a.push("mp4".to_string());
+                vec![
+                    "-f".to_string(),
+                    "bv*+ba/b".to_string(),
+                    "--merge-output-format".to_string(),
+                    "mp4".to_string(),
+                ]
+            }
+            _ => {
+                let mut a = vec!["-f".to_string(), format.to_string()];
+                // Seletores de resolução (ex: "bv*[height<=1080]+ba/b") combinam
+                // vídeo+áudio e precisam de remux pra manter a promessa de MP4;
+                // um id de áudio puro (sem "+") não passa por aqui.
+                if format.contains('+') {
+                    a.push("--merge-output-format".to_string());
+                    a.push("mp4".to_string());
+                }
                 a
             }
-            _ => vec!["-f".to_string(), format.to_string()],
         };
+        push_ejs_args(&mut args);
         if let Some((start, end)) = &options.section {
             args.extend(section_arg(start, end));
         }
@@ -316,10 +352,38 @@ impl DownloadManager {
                 .join()
                 .map_err(|_| "Erro interno ao aguardar processo".to_string())
                 .and_then(|r| r);
-            let stderr_text = output.as_ref().ok().map(|o| o.stderr.clone());
+            let mut stderr_text = output.as_ref().ok().map(|o| o.stderr.clone());
 
             let was_cancelled = manager.cancelled.lock().unwrap().remove(&finish_id);
             let (mut status, mut path, mut error) = final_status(output, was_cancelled, &output_dir);
+            let mut current_args = args;
+
+            // Binário de yt-dlp desatualizado (auto-update falhou) não conhece
+            // --remote-components ainda: reexecuta sem a flag em vez de deixar
+            // todo download quebrar por causa de uma flag opcional.
+            if status == "failed" && stderr_text.as_deref().is_some_and(is_unrecognized_remote_components_error)
+            {
+                log::info!(
+                    "Download {finish_id}: binário de yt-dlp não suporta --remote-components, tentando sem EJS"
+                );
+                current_args = without_remote_components(&current_args);
+                match spawn_attempt(&finish_app, &ytdlp_bin, &current_args, &finish_id) {
+                    Ok((handle, retry_join)) => {
+                        manager.active.lock().unwrap().insert(finish_id.clone(), handle);
+                        let retry_output = retry_join
+                            .join()
+                            .map_err(|_| "Erro interno ao aguardar processo".to_string())
+                            .and_then(|r| r);
+                        stderr_text = retry_output.as_ref().ok().map(|o| o.stderr.clone());
+                        let retry_cancelled = manager.cancelled.lock().unwrap().remove(&finish_id);
+                        let (s, p, e) = final_status(retry_output, retry_cancelled, &output_dir);
+                        status = s;
+                        path = p;
+                        error = e;
+                    }
+                    Err(e) => log::error!("Falha ao tentar novamente sem --remote-components: {e}"),
+                }
+            }
 
             // YouTube às vezes exige prova de humano ("Sign in to confirm
             // you're not a bot"). Sem retry, todo download falha até o
@@ -333,7 +397,7 @@ impl DownloadManager {
                 log::info!(
                     "Download {finish_id} bloqueado por verificação anti-bot, tentando novamente com cookies do navegador"
                 );
-                let retry_args = with_cookies_from_browser(&args, "chrome");
+                let retry_args = with_cookies_from_browser(&current_args, "chrome");
                 match spawn_attempt(&finish_app, &ytdlp_bin, &retry_args, &finish_id) {
                     Ok((handle, retry_join)) => {
                         manager.active.lock().unwrap().insert(finish_id.clone(), handle);
@@ -405,6 +469,30 @@ impl DownloadManager {
     pub fn clear_history(&self) {
         self.history.clear();
     }
+}
+
+/// Roda uma consulta síncrona (sem streaming de progresso, ex: --dump-json)
+/// com fallback automático se o binário for velho demais pro --remote-components.
+fn run_probe(ytdlp_bin: &str, args: &[String]) -> Result<ProcessOutput, String> {
+    let (_, join) = spawn_process(ytdlp_bin, args, Some(Duration::from_secs(30)), |_| {}, |_| {})?;
+    let output = join
+        .join()
+        .map_err(|_| "Erro interno ao aguardar processo".to_string())??;
+
+    if output.code != 0 && is_unrecognized_remote_components_error(&output.stderr) {
+        let fallback_args = without_remote_components(args);
+        let (_, join) = spawn_process(
+            ytdlp_bin,
+            &fallback_args,
+            Some(Duration::from_secs(30)),
+            |_| {},
+            |_| {},
+        )?;
+        return join
+            .join()
+            .map_err(|_| "Erro interno ao aguardar processo".to_string())?;
+    }
+    Ok(output)
 }
 
 /// Dispara uma tentativa de execução do yt-dlp: emite o comando pro painel de
@@ -673,11 +761,40 @@ mod tests {
             args,
             vec![
                 "-f".to_string(),
-                "bestvideo+bestaudio/best".to_string(),
+                "bv*+ba/b".to_string(),
                 "--merge-output-format".to_string(),
                 "mp4".to_string(),
             ]
         );
+    }
+
+    #[test]
+    fn ejs_args_are_appended_and_removable() {
+        let mut args = vec!["-f".to_string(), "best".to_string()];
+        push_ejs_args(&mut args);
+        assert_eq!(
+            args,
+            vec![
+                "-f".to_string(),
+                "best".to_string(),
+                "--remote-components".to_string(),
+                "ejs:github".to_string(),
+            ]
+        );
+        assert_eq!(
+            without_remote_components(&args),
+            vec!["-f".to_string(), "best".to_string()]
+        );
+    }
+
+    #[test]
+    fn detects_unrecognized_remote_components_error() {
+        assert!(is_unrecognized_remote_components_error(
+            "yt-dlp: error: unrecognized arguments: --remote-components ejs:github"
+        ));
+        assert!(!is_unrecognized_remote_components_error(
+            "ERROR: Video unavailable"
+        ));
     }
 
     #[test]
