@@ -8,6 +8,7 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 use tauri::{AppHandle, Emitter};
+use tauri_plugin_notification::NotificationExt;
 use uuid::Uuid;
 
 const PROGRESS_THROTTLE_MS: u128 = 500;
@@ -423,6 +424,14 @@ impl DownloadManager {
                     "Download {finish_id} falhou: {}",
                     error.as_deref().unwrap_or("erro desconhecido")
                 ),
+            }
+
+            // Downloads levam minutos — sem isso, quem troca de janela só
+            // descobre que terminou voltando pro app manualmente.
+            if status != "cancelled" {
+                let notif_title = if status == "done" { "Download concluído" } else { "Download falhou" };
+                let body = title.as_deref().unwrap_or(url.as_str());
+                let _ = finish_app.notification().builder().title(notif_title).body(body).show();
             }
 
             let _ = finish_app.emit(

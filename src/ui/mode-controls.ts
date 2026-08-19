@@ -1,3 +1,4 @@
+import { resetAdvancedPlaylistConfirm, resetQuickPlaylistConfirm } from "../download";
 import { currentMode, setMode, type AppMode } from "../mode";
 import { elements, state } from "../state";
 import { toggle } from "../utils";
@@ -13,9 +14,45 @@ export function renderModeLabel() {
   }
 }
 
+// Sair do Avançado com campos preenchidos exige um segundo clique — senão um
+// toque sem querer no pill descarta corte/legendas/argumentos em silêncio.
+const MODE_SWITCH_CONFIRM_TIMEOUT_MS = 3000;
+let modeSwitchConfirmTimer: ReturnType<typeof setTimeout> | null = null;
+
+function hasUnsavedAdvancedInput(): boolean {
+  return Boolean(
+    elements.sectionStart?.value.trim() ||
+      elements.sectionEnd?.value.trim() ||
+      elements.subLangsCheckbox?.checked ||
+      elements.subLangsInput?.value.trim() ||
+      elements.extraArgsInput?.value.trim()
+  );
+}
+
+function resetModeSwitchConfirm() {
+  if (modeSwitchConfirmTimer) {
+    clearTimeout(modeSwitchConfirmTimer);
+    modeSwitchConfirmTimer = null;
+  }
+  elements.modeToggleBtn?.classList.remove("is-confirming");
+  renderModeLabel();
+}
+
 /** Troca de modo descarta o vídeo/formato carregados — evita estado híbrido. */
 export function handleToggleMode() {
-  const next: AppMode = currentMode() === "basic" ? "advanced" : "basic";
+  const from = currentMode();
+
+  if (from === "advanced" && hasUnsavedAdvancedInput() && !elements.modeToggleBtn?.classList.contains("is-confirming")) {
+    elements.modeToggleBtn?.classList.add("is-confirming");
+    if (elements.modeToggleLabel) elements.modeToggleLabel.textContent = "Descartar?";
+    modeSwitchConfirmTimer = setTimeout(resetModeSwitchConfirm, MODE_SWITCH_CONFIRM_TIMEOUT_MS);
+    return;
+  }
+  resetModeSwitchConfirm();
+  resetQuickPlaylistConfirm();
+  resetAdvancedPlaylistConfirm();
+
+  const next: AppMode = from === "basic" ? "advanced" : "basic";
   setMode(next);
   renderModeLabel();
 

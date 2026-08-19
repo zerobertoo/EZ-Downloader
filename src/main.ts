@@ -3,7 +3,7 @@ import { initMode, currentMode } from "./mode";
 import { initTheme } from "./theme";
 import { PATH_STORAGE_KEY, UI_STRINGS, elements, state } from "./state";
 import { renderPlaylistHint, toggle } from "./utils";
-import { handleDownload, handleQuickDownload } from "./download";
+import { handleDownload, handleQuickDownload, resetAdvancedPlaylistConfirm, resetQuickPlaylistConfirm } from "./download";
 import { handleDownloadFinished, initDownloadsUI, updateDownloadProgress } from "./downloads";
 import { appendDebugLine, showDebugCommand, toggleNerdMode } from "./ui/debug";
 import { handleSelectPath, updateDownloadPathDisplay } from "./ui/destination";
@@ -66,6 +66,8 @@ document.addEventListener("DOMContentLoaded", async () => {
   // Editar a URL reavalia se o vídeo carregado ainda corresponde ao que está no campo.
   elements.urlInput?.addEventListener("input", () => {
     clearFieldError(elements.urlError);
+    resetQuickPlaylistConfirm();
+    resetAdvancedPlaylistConfirm();
     renderPlaylistHint();
     render();
   });

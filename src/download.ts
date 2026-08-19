@@ -1,5 +1,5 @@
 import { UI_STRINGS, elements, state } from "./state";
-import { errorMessage, isValidUrl, urlFieldValue } from "./utils";
+import { errorMessage, isValidUrl, looksLikePlaylist, urlFieldValue } from "./utils";
 import { enqueueDownload } from "./downloads";
 import { clearFieldErrors, setFieldError } from "./ui/feedback";
 import { render } from "./ui/render";
@@ -11,6 +11,39 @@ import { render } from "./ui/render";
 /** Aceita MM:SS ou HH:MM:SS — mesma sintaxe do --download-sections do yt-dlp. */
 const TIME_PATTERN = /^\d{1,2}:\d{2}(:\d{2})?$/;
 
+// Playlist: exige um segundo clique antes de disparar — sem isso, uma URL de
+// playlist dispara dezenas de downloads de uma vez sem aviso. Mesmo gate nos
+// dois modos, senão a mesma URL fica protegida num modo e desprotegida no outro.
+const PLAYLIST_CONFIRM_TIMEOUT_MS = 3000;
+
+function makePlaylistConfirm(getBtn: () => HTMLButtonElement | null | undefined) {
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  const reset = () => {
+    if (timer) {
+      clearTimeout(timer);
+      timer = null;
+    }
+    getBtn()?.classList.remove("is-confirming");
+  };
+  const arm = () => {
+    getBtn()?.classList.add("is-confirming");
+    timer = setTimeout(reset, PLAYLIST_CONFIRM_TIMEOUT_MS);
+  };
+  const isArmed = () => getBtn()?.classList.contains("is-confirming") ?? false;
+  return { reset, arm, isArmed };
+}
+
+const quickPlaylistConfirm = makePlaylistConfirm(() => elements.quickDownloadBtn);
+const advancedPlaylistConfirm = makePlaylistConfirm(() => elements.downloadBtn);
+
+export function resetQuickPlaylistConfirm() {
+  quickPlaylistConfirm.reset();
+}
+
+export function resetAdvancedPlaylistConfirm() {
+  advancedPlaylistConfirm.reset();
+}
+
 let submitting = false;
 
 export async function handleDownload() {
@@ -20,6 +53,13 @@ export async function handleDownload() {
     setFieldError(elements.pathError, UI_STRINGS.errorNoPath);
     return;
   }
+
+  if (looksLikePlaylist(state.currentUrl) && !advancedPlaylistConfirm.isArmed()) {
+    advancedPlaylistConfirm.arm();
+    setFieldError(elements.urlError, UI_STRINGS.hintPlaylistConfirm);
+    return;
+  }
+  advancedPlaylistConfirm.reset();
 
   const sectionStart = elements.sectionStart?.value.trim() || undefined;
   const sectionEnd = elements.sectionEnd?.value.trim() || undefined;
@@ -82,10 +122,19 @@ export async function handleQuickDownload() {
     setFieldError(elements.urlError, UI_STRINGS.errorInvalidUrl);
     return;
   }
+  // Node de erro do Modo Avançado (#pathError) fica escondido no Modo Rápido —
+  // mostrar aqui, em #urlError, senão o clique falha em silêncio.
   if (!state.downloadPath) {
-    setFieldError(elements.pathError, UI_STRINGS.errorNoPath);
+    setFieldError(elements.urlError, UI_STRINGS.errorNoPath);
     return;
   }
+
+  if (looksLikePlaylist(url) && !quickPlaylistConfirm.isArmed()) {
+    quickPlaylistConfirm.arm();
+    setFieldError(elements.urlError, UI_STRINGS.hintPlaylistConfirm);
+    return;
+  }
+  quickPlaylistConfirm.reset();
 
   const isMp3 = state.quickFormat === "mp3";
   quickSubmitting = true;

@@ -1,6 +1,6 @@
 import { bridge, type DownloadFinished, type DownloadProgress, type StartDownloadOptions } from "./bridge";
 import { UI_STRINGS, elements, state, type DownloadItem } from "./state";
-import { errorMessage, toggle } from "./utils";
+import { errorMessage, friendlyErrorMessage, toggle } from "./utils";
 import { setDebugDownload } from "./ui/debug";
 import { setFieldError } from "./ui/feedback";
 import { loadHistory } from "./ui/history";
@@ -289,8 +289,24 @@ function buildOutcomeBanner(item: DownloadItem): HTMLElement {
   body.appendChild(bannerTitle);
   const bannerText = document.createElement("p");
   bannerText.className = "banner-text";
-  bannerText.textContent = item.phase === "done" ? item.resultPath ?? "" : item.error ? errorMessage(item.error) : "";
+  const rawError = item.phase !== "done" && item.error ? errorMessage(item.error) : null;
+  bannerText.textContent = item.phase === "done" ? item.resultPath ?? "" : rawError ? friendlyErrorMessage(rawError) : "";
   body.appendChild(bannerText);
+
+  if (rawError) {
+    const details = document.createElement("details");
+    details.className = "banner-details";
+    details.open = state.nerdMode;
+    const summary = document.createElement("summary");
+    summary.textContent = "Detalhes técnicos";
+    details.appendChild(summary);
+    const rawText = document.createElement("code");
+    rawText.className = "banner-raw-error";
+    rawText.textContent = rawError;
+    details.appendChild(rawText);
+    body.appendChild(details);
+  }
+
   banner.appendChild(body);
 
   const actions = document.createElement("div");

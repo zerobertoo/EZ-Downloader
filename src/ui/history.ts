@@ -1,6 +1,7 @@
 import { bridge, type HistoryEntry } from "../bridge";
+import { enqueueDownload } from "../downloads";
 import { UI_STRINGS, elements } from "../state";
-import { toggle } from "../utils";
+import { errorMessage, friendlyErrorMessage, toggle } from "../utils";
 import { setFieldError } from "./feedback";
 
 /* ════════════════════════════════════════════════════════════════
@@ -116,6 +117,14 @@ function buildRow(entry: HistoryEntry): HTMLElement {
   const date = new Date(entry.finishedAt).toLocaleString("pt-BR");
   meta.textContent = `${STATUS_LABEL[entry.status]} • ${entry.format} • ${date}`;
   body.appendChild(meta);
+
+  if (entry.status === "failed" && entry.error) {
+    const errorText = document.createElement("p");
+    errorText.className = "history-row-error";
+    errorText.textContent = friendlyErrorMessage(entry.error);
+    body.appendChild(errorText);
+  }
+
   row.appendChild(body);
 
   if (entry.status === "done") {
@@ -125,5 +134,34 @@ function buildRow(entry: HistoryEntry): HTMLElement {
     row.appendChild(openBtn);
   }
 
+  if (entry.status === "failed" || entry.status === "cancelled") {
+    const retryBtn = document.createElement("button");
+    retryBtn.className = "history-row-btn";
+    retryBtn.textContent = UI_STRINGS.downloadRetry;
+    retryBtn.addEventListener("click", () => void handleHistoryRetry(entry, retryBtn));
+    row.appendChild(retryBtn);
+  }
+
   return row;
+}
+
+/** Retentativa a partir do histórico só reconstrói o essencial (url/formato/destino) —
+ * corte, legendas e argumentos extras não são persistidos entre sessões. */
+async function handleHistoryRetry(entry: HistoryEntry, btn: HTMLButtonElement) {
+  btn.disabled = true;
+  try {
+    await enqueueDownload({
+      url: entry.url,
+      format: entry.format,
+      formatLabel: entry.format,
+      title: entry.title,
+      outputPath: entry.outputPath,
+      options: {},
+    });
+  } catch (error) {
+    console.error("Erro ao reenviar download:", error);
+    setFieldError(elements.urlError, `${UI_STRINGS.errorStartDownload} ${errorMessage(error)}`);
+  } finally {
+    btn.disabled = false;
+  }
 }

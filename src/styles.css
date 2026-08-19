@@ -655,6 +655,40 @@ button:focus-visible {
   color: var(--text-3);
 }
 
+/* Opções avançadas — recolhidas por padrão, evita 5 decisões simultâneas no config-card */
+.advanced-options-summary {
+  cursor: pointer;
+  user-select: none;
+  list-style: none;
+}
+.advanced-options-summary::-webkit-details-marker { display: none; }
+
+.advanced-options-summary::after {
+  content: '';
+  width: 8px;
+  height: 8px;
+  margin-left: auto;
+  border-right: 1.6px solid currentColor;
+  border-bottom: 1.6px solid currentColor;
+  transform: rotate(45deg);
+  transition: transform var(--dur-sm) var(--ease);
+}
+
+.advanced-options[open] .advanced-options-summary::after { transform: rotate(-135deg); }
+
+.field-subgroup {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 16px;
+}
+
+.field-note {
+  font-size: 0.6875rem;
+  line-height: 1.5;
+  color: var(--text-3);
+}
+
 .field-label svg { color: var(--accent); opacity: 0.75; flex-shrink: 0; }
 
 /* Select */
@@ -687,6 +721,7 @@ button:focus-visible {
 }
 
 .format-select option { background: var(--surface-2); color: var(--text); }
+.format-select optgroup { background: var(--surface-2); color: var(--text-3); font-style: normal; }
 
 .select-caret {
   position: absolute;
@@ -805,6 +840,12 @@ button:focus-visible {
   box-shadow: 0 6px 28px color-mix(in srgb, var(--accent) 56%, transparent), 0 1px 0 rgba(255,255,255,0.18) inset;
   transform: translateY(-1px);
 }
+
+.download-btn.is-confirming {
+  background: color-mix(in srgb, var(--red) 85%, var(--accent));
+  box-shadow: 0 4px 20px var(--red-glow), 0 1px 0 rgba(255,255,255,0.15) inset;
+}
+.download-btn.is-confirming:hover { background: var(--red); }
 
 .download-btn:active {
   transform: translateY(0) scale(0.99);
@@ -1035,7 +1076,36 @@ button:focus-visible {
   word-break: break-all;
 }
 
-.is-error .banner-text { color: var(--red); }
+.is-error .banner-text,
+.is-cancelled .banner-text { color: var(--red); font-family: var(--font); }
+
+.banner-details {
+  margin-top: 8px;
+  font-size: 0.6875rem;
+}
+
+.banner-details summary {
+  cursor: pointer;
+  color: var(--text-3);
+  user-select: none;
+}
+
+.banner-details summary:hover { color: var(--text-2); }
+
+.banner-raw-error {
+  display: block;
+  margin-top: 6px;
+  padding: 8px 10px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  color: var(--text-3);
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  line-height: 1.5;
+  word-break: break-all;
+  white-space: pre-wrap;
+}
 
 .banner-actions {
   display: flex;
@@ -1157,6 +1227,13 @@ button:focus-visible {
   background: var(--accent-dim);
   color: var(--accent-bright);
   border-color: var(--border-focus);
+}
+
+.mode-pill.is-confirming,
+.mode-pill.is-confirming:hover {
+  background: var(--red-dim);
+  color: var(--red);
+  border-color: rgba(248,113,113,0.45);
 }
 
 /* ── Toggle MP3/MP4 do Modo Rápido ──────────────────────────── */
@@ -1477,6 +1554,12 @@ button:focus-visible {
   font-family: var(--font-mono);
 }
 
+.history-row-error {
+  font-size: 0.6875rem;
+  color: var(--red);
+  margin-top: 2px;
+}
+
 .history-row-btn {
   flex-shrink: 0;
   height: 28px;
@@ -1495,6 +1578,11 @@ button:focus-visible {
 .history-row-btn:hover {
   background: var(--surface-4);
   color: var(--text);
+}
+
+.history-row-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .history-empty {

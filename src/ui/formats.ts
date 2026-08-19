@@ -79,18 +79,34 @@ function showThumbnailPlaceholder() {
     "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 320 180'%3E%3Crect fill='%23333' width='320' height='180'/%3E%3Cpath fill='%23666' d='M145 85l45 27v-54z'/%3E%3C/svg%3E";
 }
 
+const FORMAT_GROUP_LABEL: Record<FormatOption["type"], string> = {
+  best: "Recomendado",
+  combined: "Vídeo + Áudio",
+  video: "Somente vídeo",
+  audio: "Somente áudio",
+};
+
 function populateFormatSelect() {
   if (!elements.formatSelect) return;
 
   elements.formatSelect.innerHTML = "";
 
+  const groups = new Map<FormatOption["type"], HTMLOptGroupElement>();
   state.formats.forEach((format) => {
+    let group = groups.get(format.type);
+    if (!group) {
+      group = document.createElement("optgroup");
+      group.label = FORMAT_GROUP_LABEL[format.type];
+      groups.set(format.type, group);
+      elements.formatSelect?.appendChild(group);
+    }
+
     const option = document.createElement("option");
     option.value = format.id;
     const sizeStr = format.filesize ? ` — ${formatFileSize(format.filesize)}` : "";
     option.textContent = format.label + sizeStr;
     option.dataset.format = JSON.stringify(format);
-    elements.formatSelect?.appendChild(option);
+    group.appendChild(option);
   });
 
   if (state.formats.length > 0) {

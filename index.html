@@ -167,31 +167,38 @@
 
             <div class="field-divider" role="separator" aria-hidden="true"></div>
 
-            <!-- Corte por tempo -->
-            <div class="field-group">
-              <label class="field-label">Corte (opcional)</label>
-              <div class="section-row">
-                <input type="text" id="sectionStart" class="path-input section-input" placeholder="00:00:00" aria-label="Início do corte" />
-                <span class="section-sep">até</span>
-                <input type="text" id="sectionEnd" class="path-input section-input" placeholder="00:01:30" aria-label="Fim do corte" />
+            <!-- Opções avançadas: corte, legendas e argumentos extras ficam recolhidos —
+                 fora do caminho de quem só quer escolher o formato e baixar. -->
+            <details class="field-group advanced-options">
+              <summary class="field-label advanced-options-summary">Opções avançadas</summary>
+
+              <!-- Corte por tempo -->
+              <div class="field-subgroup">
+                <label class="field-label">Corte (opcional)</label>
+                <div class="section-row">
+                  <input type="text" id="sectionStart" class="path-input section-input" placeholder="00:00:00" aria-label="Início do corte" />
+                  <span class="section-sep">até</span>
+                  <input type="text" id="sectionEnd" class="path-input section-input" placeholder="00:01:30" aria-label="Fim do corte" />
+                </div>
+                <p id="sectionError" class="field-error" role="alert"></p>
               </div>
-              <p id="sectionError" class="field-error" role="alert"></p>
-            </div>
 
-            <!-- Legendas -->
-            <div class="field-group">
-              <label class="field-label checkbox-label">
-                <input type="checkbox" id="subLangsCheckbox" class="field-checkbox" />
-                Baixar legendas
-              </label>
-              <input type="text" id="subLangsInput" class="path-input hidden" placeholder="Idiomas (ex: en,pt)" aria-label="Idiomas das legendas" />
-            </div>
+              <!-- Legendas -->
+              <div class="field-subgroup">
+                <label class="field-label checkbox-label">
+                  <input type="checkbox" id="subLangsCheckbox" class="field-checkbox" />
+                  Baixar legendas
+                </label>
+                <input type="text" id="subLangsInput" class="path-input hidden" placeholder="Idiomas (ex: en,pt)" aria-label="Idiomas das legendas" />
+              </div>
 
-            <!-- Argumentos extras (allowlist validada no backend) -->
-            <div class="field-group">
-              <label for="extraArgsInput" class="field-label">Argumentos extras (yt-dlp)</label>
-              <input type="text" id="extraArgsInput" class="path-input" placeholder="ex: --embed-thumbnail --no-playlist" aria-label="Argumentos extras" />
-            </div>
+              <!-- Argumentos extras (allowlist validada no backend) -->
+              <div class="field-subgroup">
+                <label for="extraArgsInput" class="field-label">Argumentos extras (yt-dlp)</label>
+                <input type="text" id="extraArgsInput" class="path-input" placeholder="ex: --embed-thumbnail --no-playlist" aria-label="Argumentos extras" />
+                <p class="field-note">Flags aceitas: --write-subs, --write-auto-subs, --embed-thumbnail, --embed-metadata, --no-playlist, --yes-playlist, --cookies-from-browser &lt;navegador&gt;. Outras são rejeitadas ao iniciar o download.</p>
+              </div>
+            </details>
 
             <div class="field-divider" role="separator" aria-hidden="true"></div>
 

@@ -9,6 +9,7 @@ export const UI_STRINGS = {
   errorIncompleteSection: "Preencha início e fim do corte, ou deixe os dois em branco",
   errorInvalidSection: "Formato de tempo inválido — use HH:MM:SS (ex: 00:01:30)",
   hintPlaylist: "URL de playlist detectada — todos os itens serão baixados de uma vez",
+  hintPlaylistConfirm: "Playlist detectada — clique em Baixar de novo para confirmar",
   errorSelectDir: "Erro ao selecionar diretório",
   errorOpenFolder: "Erro ao abrir pasta de downloads",
   errorCancel: "Erro ao cancelar download",
