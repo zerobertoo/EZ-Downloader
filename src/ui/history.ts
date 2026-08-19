@@ -20,16 +20,8 @@ export function initHistoryUI() {
     elements.historyToggleBtn?.setAttribute("aria-expanded", String(collapsed));
   });
 
-  elements.clearHistoryBtn?.addEventListener("click", async () => {
-    if (!confirm(UI_STRINGS.historyClearConfirm)) return;
-    try {
-      await bridge.clearHistory();
-      renderHistory([]);
-    } catch (error) {
-      console.error("Erro ao limpar histórico:", error);
-      setFieldError(elements.urlError, UI_STRINGS.errorClearHistory);
-    }
-  });
+  elements.clearHistoryBtn?.addEventListener("click", () => void handleClearHistoryClick());
+  elements.clearHistoryBtn?.addEventListener("blur", resetClearHistoryButton);
 
   elements.historyList?.addEventListener("click", (e) => {
     const target = e.target as HTMLElement;
@@ -41,6 +33,43 @@ export function initHistoryUI() {
       });
     }
   });
+}
+
+// Confirmação em dois cliques no próprio botão — sem window.confirm(), que
+// quebra o visual escuro do app com um diálogo nativo do SO.
+const CLEAR_CONFIRM_TIMEOUT_MS = 3000;
+let clearConfirmTimer: ReturnType<typeof setTimeout> | null = null;
+
+function resetClearHistoryButton() {
+  if (clearConfirmTimer) {
+    clearTimeout(clearConfirmTimer);
+    clearConfirmTimer = null;
+  }
+  const btn = elements.clearHistoryBtn;
+  if (!btn) return;
+  btn.classList.remove("is-confirming");
+  btn.textContent = UI_STRINGS.historyClear;
+}
+
+async function handleClearHistoryClick() {
+  const btn = elements.clearHistoryBtn;
+  if (!btn) return;
+
+  if (!btn.classList.contains("is-confirming")) {
+    btn.classList.add("is-confirming");
+    btn.textContent = UI_STRINGS.historyClearConfirmLabel;
+    clearConfirmTimer = setTimeout(resetClearHistoryButton, CLEAR_CONFIRM_TIMEOUT_MS);
+    return;
+  }
+
+  resetClearHistoryButton();
+  try {
+    await bridge.clearHistory();
+    renderHistory([]);
+  } catch (error) {
+    console.error("Erro ao limpar histórico:", error);
+    setFieldError(elements.urlError, UI_STRINGS.errorClearHistory);
+  }
 }
 
 // Downloads que terminam quase juntos disparam loadHistory() concorrente;
@@ -72,6 +101,7 @@ function buildRow(entry: HistoryEntry): HTMLElement {
 
   const icon = document.createElement("span");
   icon.className = "history-row-icon";
+  icon.setAttribute("aria-hidden", "true");
   icon.textContent = entry.status === "done" ? "✓" : entry.status === "failed" ? "✕" : "–";
   row.appendChild(icon);
 

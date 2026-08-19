@@ -34,6 +34,10 @@
   /* Accent — tons derivados */
   --accent-dim:  color-mix(in srgb, var(--accent) 14%, transparent);
   --accent-glow: color-mix(in srgb, var(--accent) 32%, transparent);
+  /* Texto sobre fundo --accent — todos os tons de tema são claros o
+     suficiente pra um texto escuro passar em AA (~6.8:1 a 9.9:1); branco
+     ficava entre 1.9:1 e 2.8:1, abaixo do mínimo de 4.5:1. */
+  --on-accent:   #100c08;
 
   /* Text */
   --text:   #edf0f5;
@@ -73,6 +77,15 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   user-select: none;
+}
+
+/* ── Foco por teclado ───────────────────────────────────────────
+   Botões não tinham nenhum anel de foco desenhado (só o outline
+   default do navegador/webview) — aplica o mesmo anel já usado em
+   inputs a todo botão da aplicação de uma vez, na base. */
+button:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--accent-dim);
 }
 
 /* ── Noise grain overlay (depth texture) ────────────────────── */
@@ -398,7 +411,7 @@ body {
   background: var(--accent);
   border: none;
   border-radius: 0.75rem;
-  color: #fff;
+  color: var(--on-accent);
   font-family: var(--font);
   font-size: 0.875rem;
   font-weight: 700;
@@ -443,8 +456,8 @@ body {
   width: 14px;
   height: 14px;
   border-radius: 50%;
-  border: 2px solid rgba(255,255,255,0.35);
-  border-top-color: #fff;
+  border: 2px solid color-mix(in srgb, var(--on-accent) 35%, transparent);
+  border-top-color: var(--on-accent);
   animation: spin 0.72s linear infinite;
   flex-shrink: 0;
 }
@@ -757,7 +770,7 @@ body {
   background: var(--accent);
   border: none;
   border-radius: 1.125rem;
-  color: #fff;
+  color: var(--on-accent);
   font-family: var(--font);
   font-size: 0.9375rem;
   font-weight: 800;
@@ -1063,7 +1076,7 @@ body {
 
 .amber-btn {
   background: var(--accent);
-  color: #fff;
+  color: var(--on-accent);
   box-shadow: 0 3px 14px color-mix(in srgb, var(--accent) 34%, transparent);
 }
 .amber-btn:hover {
@@ -1181,7 +1194,7 @@ body {
 
 .quick-format-option.is-active {
   background: var(--accent);
-  color: #fff;
+  color: var(--on-accent);
   box-shadow: 0 2px 10px color-mix(in srgb, var(--accent) 38%, transparent);
 }
 
@@ -1510,6 +1523,13 @@ body {
   background: var(--red-dim);
   color: var(--red);
   border-color: rgba(248,113,113,0.28);
+}
+
+.history-clear-btn.is-confirming,
+.history-clear-btn.is-confirming:hover {
+  background: var(--red-dim);
+  color: var(--red);
+  border-color: rgba(248,113,113,0.45);
 }
 
 /* ════════════════════════════════════════════════════════════════

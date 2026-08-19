@@ -26,7 +26,7 @@ export const UI_STRINGS = {
   historyTitle: "Histórico",
   historyEmpty: "Nenhum download ainda",
   historyClear: "Limpar histórico",
-  historyClearConfirm: "Limpar todo o histórico de downloads?",
+  historyClearConfirmLabel: "Confirmar?",
   downloadRemove: "Remover",
   downloadRetry: "Tentar novamente",
   downloadOpenFolder: "Abrir pasta",
