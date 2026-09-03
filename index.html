@@ -210,6 +210,13 @@
                 <p class="field-note">Precisa estar logado no navegador escolhido e ele fechado durante o download.</p>
               </div>
 
+              <!-- Limite de velocidade -->
+              <div class="field-subgroup">
+                <label for="limitRateInput" class="field-label">Limite de velocidade (opcional)</label>
+                <input type="text" id="limitRateInput" class="path-input" placeholder="ex: 2M, 500K" aria-label="Limite de velocidade de download" />
+                <p id="limitRateError" class="field-error" role="alert"></p>
+              </div>
+
               <!-- Argumentos extras (allowlist validada no backend) -->
               <div class="field-subgroup">
                 <label for="extraArgsInput" class="field-label">Argumentos extras (yt-dlp)</label>

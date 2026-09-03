@@ -61,6 +61,7 @@ pub struct DownloadOptions {
     pub sub_langs: Option<String>,
     pub extra_args: Option<String>,
     pub cookies_browser: Option<String>,
+    pub limit_rate: Option<String>,
 }
 
 #[derive(Clone)]
@@ -161,6 +162,29 @@ fn cookies_browser_args(browser: &str) -> Result<Vec<String>, String> {
         return Err(format!("Navegador não suportado: {browser}"));
     }
     Ok(vec!["--cookies-from-browser".to_string(), browser.to_string()])
+}
+
+/// Valida o formato aceito pelo --limit-rate do yt-dlp: número (com ou sem
+/// decimal) seguido de um sufixo de unidade opcional (K/M/G, maiúsculo ou não).
+fn validate_limit_rate(raw: &str) -> Result<String, String> {
+    let raw = raw.trim();
+    let numeric_part = match raw.chars().last() {
+        Some(c) if c.is_ascii_alphabetic() => {
+            if !matches!(c.to_ascii_uppercase(), 'K' | 'M' | 'G') {
+                return Err(format!("Unidade de limite inválida: {raw}"));
+            }
+            &raw[..raw.len() - 1]
+        }
+        _ => raw,
+    };
+    if numeric_part.is_empty() || numeric_part.parse::<f64>().is_err() {
+        return Err(format!("Limite de velocidade inválido: {raw}"));
+    }
+    Ok(raw.to_string())
+}
+
+fn limit_rate_args(raw: &str) -> Result<Vec<String>, String> {
+    Ok(vec!["--limit-rate".to_string(), validate_limit_rate(raw)?])
 }
 
 /// Args de seleção pro Modo Rápido — sem chamada prévia de metadados,
@@ -333,6 +357,9 @@ impl DownloadManager {
         }
         if let Some(browser) = &options.cookies_browser {
             args.extend(cookies_browser_args(browser)?);
+        }
+        if let Some(rate) = &options.limit_rate {
+            args.extend(limit_rate_args(rate)?);
         }
         if let Some(extra) = &options.extra_args {
             args.extend(validate_extra_args(extra)?);
@@ -795,6 +822,20 @@ mod tests {
     #[test]
     fn extra_args_rejects_value_flag_missing_value() {
         assert!(validate_extra_args("--cookies-from-browser").is_err());
+    }
+
+    #[test]
+    fn limit_rate_accepts_plain_number_and_unit_suffix() {
+        assert_eq!(validate_limit_rate("500K"), Ok("500K".to_string()));
+        assert_eq!(validate_limit_rate("2.5M"), Ok("2.5M".to_string()));
+        assert_eq!(validate_limit_rate("1024"), Ok("1024".to_string()));
+    }
+
+    #[test]
+    fn limit_rate_rejects_invalid_unit_and_non_numeric() {
+        assert!(validate_limit_rate("500X").is_err());
+        assert!(validate_limit_rate("abc").is_err());
+        assert!(validate_limit_rate("").is_err());
     }
 
     #[test]

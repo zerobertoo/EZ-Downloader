@@ -26,7 +26,8 @@ function hasUnsavedAdvancedInput(): boolean {
       elements.subLangsCheckbox?.checked ||
       elements.subLangsInput?.value.trim() ||
       elements.extraArgsInput?.value.trim() ||
-      elements.cookiesBrowserSelect?.value
+      elements.cookiesBrowserSelect?.value ||
+      elements.limitRateInput?.value.trim()
   );
 }
 
@@ -72,6 +73,7 @@ export function handleToggleMode() {
   toggle(elements.subLangsInput, false);
   if (elements.extraArgsInput) elements.extraArgsInput.value = "";
   if (elements.cookiesBrowserSelect) elements.cookiesBrowserSelect.value = "";
+  if (elements.limitRateInput) elements.limitRateInput.value = "";
 }
 
 export function setQuickFormat(format: "mp4" | "mp3") {

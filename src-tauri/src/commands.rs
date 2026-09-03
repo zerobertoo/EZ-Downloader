@@ -60,6 +60,7 @@ pub fn start_download(
     sub_langs: Option<String>,
     extra_args: Option<String>,
     cookies_browser: Option<String>,
+    limit_rate: Option<String>,
 ) -> Result<String, String> {
     // Validações síncronas: erro aqui chega na hora pro frontend. Depois
     // disso o download roda em background e o fim chega via "download-finished".
@@ -71,6 +72,7 @@ pub fn start_download(
         sub_langs,
         extra_args,
         cookies_browser,
+        limit_rate,
     };
     manager.start_download(&app, &url, &format, title, Some(output_path), options)
 }

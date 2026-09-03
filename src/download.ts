@@ -11,6 +11,9 @@ import { render } from "./ui/render";
 /** Aceita MM:SS ou HH:MM:SS — mesma sintaxe do --download-sections do yt-dlp. */
 const TIME_PATTERN = /^\d{1,2}:\d{2}(:\d{2})?$/;
 
+/** Número com sufixo de unidade opcional — mesma sintaxe do --limit-rate do yt-dlp. */
+const RATE_PATTERN = /^\d+(\.\d+)?[KMG]?$/i;
+
 // Playlist: exige um segundo clique antes de disparar — sem isso, uma URL de
 // playlist dispara dezenas de downloads de uma vez sem aviso. Mesmo gate nos
 // dois modos, senão a mesma URL fica protegida num modo e desprotegida no outro.
@@ -79,6 +82,12 @@ export async function handleDownload() {
     ? elements.subLangsInput?.value.trim() || undefined
     : undefined;
 
+  const limitRate = elements.limitRateInput?.value.trim() || undefined;
+  if (limitRate && !RATE_PATTERN.test(limitRate)) {
+    setFieldError(elements.limitRateError, UI_STRINGS.errorInvalidLimitRate);
+    return;
+  }
+
   clearFieldErrors();
   submitting = true;
   if (elements.downloadBtn) elements.downloadBtn.disabled = true;
@@ -95,6 +104,7 @@ export async function handleDownload() {
         subLangs,
         extraArgs: elements.extraArgsInput?.value.trim() || undefined,
         cookiesBrowser: elements.cookiesBrowserSelect?.value || undefined,
+        limitRate,
       },
     });
   } catch (error) {
