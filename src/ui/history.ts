@@ -24,6 +24,10 @@ export function initHistoryUI() {
   elements.clearHistoryBtn?.addEventListener("click", () => void handleClearHistoryClick());
   elements.clearHistoryBtn?.addEventListener("blur", resetClearHistoryButton);
 
+  elements.historySearchInput?.addEventListener("input", () => {
+    renderHistory(filterEntries(allEntries, elements.historySearchInput?.value ?? ""));
+  });
+
   elements.historyList?.addEventListener("click", (e) => {
     const target = e.target as HTMLElement;
     const row = target.closest<HTMLElement>("[data-history-path]");
@@ -66,6 +70,7 @@ async function handleClearHistoryClick() {
   resetClearHistoryButton();
   try {
     await bridge.clearHistory();
+    allEntries = [];
     renderHistory([]);
   } catch (error) {
     console.error("Erro ao limpar histórico:", error);
@@ -76,18 +81,34 @@ async function handleClearHistoryClick() {
 // Downloads que terminam quase juntos disparam loadHistory() concorrente;
 // sem isso, uma resposta mais lenta pode sobrescrever o render com dado velho.
 let loadGeneration = 0;
+let allEntries: HistoryEntry[] = [];
 
 export async function loadHistory() {
   const generation = ++loadGeneration;
   const entries = await bridge.getHistory();
   if (generation !== loadGeneration) return;
-  renderHistory(entries);
+  allEntries = entries;
+  renderHistory(filterEntries(entries, elements.historySearchInput?.value ?? ""));
+}
+
+/** Busca simples por substring em título e URL — histórico já vem inteiro do backend. */
+function filterEntries(entries: HistoryEntry[], query: string): HistoryEntry[] {
+  const q = query.trim().toLowerCase();
+  if (!q) return entries;
+  return entries.filter(
+    (e) => (e.title || "").toLowerCase().includes(q) || e.url.toLowerCase().includes(q)
+  );
 }
 
 function renderHistory(entries: HistoryEntry[]) {
   if (!elements.historyList) return;
 
+  const searching = Boolean(elements.historySearchInput?.value.trim());
   toggle(elements.historyEmpty, entries.length === 0);
+  if (elements.historyEmpty) {
+    elements.historyEmpty.textContent =
+      searching && allEntries.length > 0 ? UI_STRINGS.historyNoResults : UI_STRINGS.historyEmpty;
+  }
   elements.historyList.innerHTML = "";
 
   for (const entry of entries) {
