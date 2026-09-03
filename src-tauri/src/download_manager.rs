@@ -161,7 +161,10 @@ fn cookies_browser_args(browser: &str) -> Result<Vec<String>, String> {
     if !ALLOWED_COOKIE_BROWSERS.contains(&browser) {
         return Err(format!("Navegador não suportado: {browser}"));
     }
-    Ok(vec!["--cookies-from-browser".to_string(), browser.to_string()])
+    Ok(vec![
+        "--cookies-from-browser".to_string(),
+        browser.to_string(),
+    ])
 }
 
 /// Valida o formato aceito pelo --limit-rate do yt-dlp: número (com ou sem
