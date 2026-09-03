@@ -60,6 +60,7 @@ pub struct DownloadOptions {
     pub section: Option<(String, String)>,
     pub sub_langs: Option<String>,
     pub extra_args: Option<String>,
+    pub cookies_browser: Option<String>,
 }
 
 #[derive(Clone)]
@@ -147,6 +148,19 @@ fn subtitles_args(langs: &str) -> Vec<String> {
         "--sub-langs".to_string(),
         langs.to_string(),
     ]
+}
+
+// Mesma lista que o yt-dlp aceita em --cookies-from-browser (sem os perfis
+// opcionais entre parênteses, que este app não expõe na UI).
+const ALLOWED_COOKIE_BROWSERS: &[&str] = &[
+    "chrome", "firefox", "edge", "brave", "opera", "safari", "vivaldi", "chromium",
+];
+
+fn cookies_browser_args(browser: &str) -> Result<Vec<String>, String> {
+    if !ALLOWED_COOKIE_BROWSERS.contains(&browser) {
+        return Err(format!("Navegador não suportado: {browser}"));
+    }
+    Ok(vec!["--cookies-from-browser".to_string(), browser.to_string()])
 }
 
 /// Args de seleção pro Modo Rápido — sem chamada prévia de metadados,
@@ -316,6 +330,9 @@ impl DownloadManager {
         }
         if let Some(langs) = &options.sub_langs {
             args.extend(subtitles_args(langs));
+        }
+        if let Some(browser) = &options.cookies_browser {
+            args.extend(cookies_browser_args(browser)?);
         }
         if let Some(extra) = &options.extra_args {
             args.extend(validate_extra_args(extra)?);

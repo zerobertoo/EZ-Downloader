@@ -47,6 +47,8 @@ export interface StartDownloadOptions {
   sectionEnd?: string;
   subLangs?: string;
   extraArgs?: string;
+  cookiesBrowser?: string;
+  limitRate?: string;
 }
 
 export interface DebugCommand {
@@ -95,6 +97,8 @@ export const bridge = {
       sectionEnd: options.sectionEnd ?? null,
       subLangs: options.subLangs ?? null,
       extraArgs: options.extraArgs ?? null,
+      cookiesBrowser: options.cookiesBrowser ?? null,
+      limitRate: options.limitRate ?? null,
     }),
 
   selectDownloadPath: (): Promise<string | null> => invoke("select_download_path"),

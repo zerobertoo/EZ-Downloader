@@ -113,6 +113,7 @@ export const elements = {
   subLangsCheckbox: document.getElementById("subLangsCheckbox") as HTMLInputElement | null,
   subLangsInput: document.getElementById("subLangsInput") as HTMLInputElement | null,
   extraArgsInput: document.getElementById("extraArgsInput") as HTMLInputElement | null,
+  cookiesBrowserSelect: document.getElementById("cookiesBrowserSelect") as HTMLSelectElement | null,
   nerdModeBtn: document.getElementById("nerdModeBtn") as HTMLButtonElement | null,
   debugPanel: document.getElementById("debugPanel"),
   debugCommand: document.getElementById("debugCommand"),

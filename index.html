@@ -192,6 +192,24 @@
                 <input type="text" id="subLangsInput" class="path-input hidden" placeholder="Idiomas (ex: en,pt)" aria-label="Idiomas das legendas" />
               </div>
 
+              <!-- Cookies do navegador: sessão já logada resolve vídeos com idade
+                   restrita ou 403 de anti-bot sem precisar exportar cookies manualmente. -->
+              <div class="field-subgroup">
+                <label for="cookiesBrowserSelect" class="field-label">Usar cookies do navegador</label>
+                <select id="cookiesBrowserSelect" class="path-input" aria-label="Navegador para importar cookies">
+                  <option value="">Nenhum</option>
+                  <option value="chrome">Chrome</option>
+                  <option value="firefox">Firefox</option>
+                  <option value="edge">Edge</option>
+                  <option value="brave">Brave</option>
+                  <option value="opera">Opera</option>
+                  <option value="vivaldi">Vivaldi</option>
+                  <option value="chromium">Chromium</option>
+                  <option value="safari">Safari</option>
+                </select>
+                <p class="field-note">Precisa estar logado no navegador escolhido e ele fechado durante o download.</p>
+              </div>
+
               <!-- Argumentos extras (allowlist validada no backend) -->
               <div class="field-subgroup">
                 <label for="extraArgsInput" class="field-label">Argumentos extras (yt-dlp)</label>

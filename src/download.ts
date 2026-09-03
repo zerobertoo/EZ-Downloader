@@ -94,6 +94,7 @@ export async function handleDownload() {
         sectionEnd,
         subLangs,
         extraArgs: elements.extraArgsInput?.value.trim() || undefined,
+        cookiesBrowser: elements.cookiesBrowserSelect?.value || undefined,
       },
     });
   } catch (error) {
