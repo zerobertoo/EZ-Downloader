@@ -189,7 +189,7 @@ function buildCard(item: DownloadItem): HTMLElement {
     const remove = document.createElement("button");
     remove.className = "download-card-remove js-remove";
     remove.setAttribute("aria-label", UI_STRINGS.downloadRemove);
-    remove.textContent = "×";
+    remove.innerHTML = `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/><line x1="6" y1="6" x2="18" y2="18" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg>`;
     head.appendChild(remove);
   }
 

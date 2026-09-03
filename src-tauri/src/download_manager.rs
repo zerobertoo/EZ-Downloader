@@ -177,7 +177,20 @@ fn validate_limit_rate(raw: &str) -> Result<String, String> {
         }
         _ => raw,
     };
-    if numeric_part.is_empty() || numeric_part.parse::<f64>().is_err() {
+    // Validação manual em vez de f64::parse: parse aceita "-5", "NaN" e "inf"
+    // como número válido, e nada disso é um limite de banda que faça sentido
+    // passar pro yt-dlp como --limit-rate.
+    let mut seen_dot = false;
+    let numeric_ok = !numeric_part.is_empty()
+        && numeric_part.chars().all(|c| {
+            if c == '.' && !seen_dot {
+                seen_dot = true;
+                true
+            } else {
+                c.is_ascii_digit()
+            }
+        });
+    if !numeric_ok {
         return Err(format!("Limite de velocidade inválido: {raw}"));
     }
     Ok(raw.to_string())
@@ -836,6 +849,10 @@ mod tests {
         assert!(validate_limit_rate("500X").is_err());
         assert!(validate_limit_rate("abc").is_err());
         assert!(validate_limit_rate("").is_err());
+        assert!(validate_limit_rate("-5").is_err());
+        assert!(validate_limit_rate("-5M").is_err());
+        assert!(validate_limit_rate("NaN").is_err());
+        assert!(validate_limit_rate("inf").is_err());
     }
 
     #[test]

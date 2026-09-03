@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>EZ Downloader</title>
     <link rel="stylesheet" href="/src/styles.css" />
+    <link rel="icon" id="favicon" type="image/svg+xml" />
     <meta
       http-equiv="Content-Security-Policy"
       content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' https: data:;"
@@ -27,9 +28,13 @@
           <span class="brand-name">EZ<span class="brand-accent">Downloader</span></span>
         </div>
         <div class="header-actions">
-          <span id="version" class="version-chip">v—</span>
-          <button id="nerdModeBtn" class="mode-pill" aria-label="Modo Nerd" aria-pressed="false" title="Modo Nerd — mostra o comando e o log ao vivo">
-            🤓 Nerd
+          <span id="version" class="version-chip">v...</span>
+          <button id="nerdModeBtn" class="mode-pill" aria-label="Modo Nerd" aria-pressed="false" title="Modo Nerd: mostra o comando e o log ao vivo">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <polyline points="8 6 2 12 8 18" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+              <polyline points="16 6 22 12 16 18" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            Nerd
           </button>
           <button id="modeToggleBtn" class="mode-pill" aria-label="Alternar Básico/Avançado">
             <span id="modeToggleLabel">Básico</span>
@@ -48,7 +53,7 @@
       </header>
 
       <!-- ── Scrollable body ── -->
-      <div class="app-body">
+      <main class="app-body">
         <div class="content-wrap">
 
           <!-- ════════════════ URL CARD — sempre visível ════════════════ -->
@@ -114,7 +119,13 @@
           <!-- ── Modo Nerd: comando montado + log ao vivo ── -->
           <div id="debugPanel" class="debug-panel hidden">
             <div class="debug-panel-header">
-              <span class="debug-panel-title">🤓 Bastidores</span>
+              <span class="debug-panel-title">
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <polyline points="8 6 2 12 8 18" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+                  <polyline points="16 6 22 12 16 18" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+                Bastidores
+              </span>
             </div>
             <code id="debugCommand" class="debug-command"></code>
             <div id="debugLog" class="debug-log" aria-live="off"></div>
@@ -269,7 +280,7 @@
           <!-- ════════════════ HISTÓRICO — persistente entre sessões ════════════════ -->
           <div id="historySection" class="history-section">
             <button id="historyToggleBtn" class="history-toggle" aria-expanded="false">
-              <span class="section-heading">Histórico</span>
+              <span class="section-heading" role="heading" aria-level="2">Histórico</span>
               <svg class="history-toggle-caret" width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                 <path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
               </svg>
@@ -283,7 +294,7 @@
           </div>
 
         </div>
-      </div>
+      </main>
     </div>
 
     <script type="module" src="/src/main.ts"></script>

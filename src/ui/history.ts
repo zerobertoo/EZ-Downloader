@@ -124,7 +124,12 @@ function buildRow(entry: HistoryEntry): HTMLElement {
   const icon = document.createElement("span");
   icon.className = "history-row-icon";
   icon.setAttribute("aria-hidden", "true");
-  icon.textContent = entry.status === "done" ? "✓" : entry.status === "failed" ? "✕" : "–";
+  icon.innerHTML =
+    entry.status === "done"
+      ? `<svg width="11" height="11" viewBox="0 0 24 24" fill="none"><path d="M20 6L9 17l-5-5" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>`
+      : entry.status === "failed"
+        ? `<svg width="10" height="10" viewBox="0 0 24 24" fill="none"><line x1="18" y1="6" x2="6" y2="18" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/><line x1="6" y1="6" x2="18" y2="18" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/></svg>`
+        : `<svg width="10" height="10" viewBox="0 0 24 24" fill="none"><line x1="5" y1="12" x2="19" y2="12" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/></svg>`;
   row.appendChild(icon);
 
   const body = document.createElement("div");

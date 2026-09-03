@@ -140,6 +140,7 @@ button:focus-visible {
   display: flex;
   align-items: center;
   gap: 9px;
+  min-width: 0;
   -webkit-app-region: no-drag;
 }
 
@@ -147,7 +148,14 @@ button:focus-visible {
   display: flex;
   align-items: center;
   gap: 8px;
+  flex-shrink: 0;
   -webkit-app-region: no-drag;
+}
+
+/* Janela estreita: a versão é decorativa, não essencial — some antes que o
+   header comece a cortar os controles reais (Nerd/Básico-Avançado/tema). */
+@media (max-width: 420px) {
+  .version-chip { display: none; }
 }
 
 .brand-icon {
@@ -168,6 +176,10 @@ button:focus-visible {
   font-weight: 700;
   letter-spacing: -0.03em;
   color: var(--text);
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 .brand-accent { color: var(--accent); }
@@ -363,6 +375,7 @@ button:focus-visible {
 
 .url-field-wrap {
   flex: 1;
+  min-width: 0;
   position: relative;
   display: flex;
   align-items: center;
@@ -379,6 +392,7 @@ button:focus-visible {
 
 .url-input {
   width: 100%;
+  min-width: 0;
   height: 2.75rem;
   padding: 0 14px 0 40px;
   background: var(--surface-2);
@@ -481,10 +495,14 @@ button:focus-visible {
 .field-error:empty { display: none; }
 
 .field-error::before {
-  content: '⚠';
-  font-size: 0.6875rem;
-  line-height: 1.45;
+  content: '';
+  width: 11px;
+  height: 11px;
+  margin-top: 2px;
   flex-shrink: 0;
+  background-color: currentColor;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z'/%3E%3C/svg%3E") center / contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z'/%3E%3C/svg%3E") center / contain no-repeat;
 }
 
 .field-error.is-hint { color: var(--accent); }
@@ -1213,6 +1231,9 @@ button:focus-visible {
   font-weight: 650;
   cursor: pointer;
   white-space: nowrap;
+  display: flex;
+  align-items: center;
+  gap: 5px;
   transition: background var(--dur-sm) var(--ease), color var(--dur-sm) var(--ease), border-color var(--dur-sm) var(--ease);
 }
 
@@ -1321,6 +1342,9 @@ button:focus-visible {
 .debug-panel-header { margin-bottom: 8px; }
 
 .debug-panel-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
   font-size: 0.6875rem;
   font-weight: 700;
   text-transform: uppercase;
@@ -1431,10 +1455,11 @@ button:focus-visible {
   border: none;
   background: transparent;
   color: var(--text-3);
-  font-size: 1.1rem;
-  line-height: 1;
   cursor: pointer;
   border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   transition: background var(--dur-sm) var(--ease), color var(--dur-sm) var(--ease);
 }
 
@@ -1515,8 +1540,6 @@ button:focus-visible {
   align-items: center;
   justify-content: center;
   border-radius: 50%;
-  font-size: 0.75rem;
-  font-weight: 700;
 }
 
 .history-row.is-done .history-row-icon {
@@ -1641,7 +1664,8 @@ button:focus-visible {
 @media (pointer: coarse) {
   .theme-btn,
   .mode-pill,
-  .download-card-remove {
+  .download-card-remove,
+  .theme-swatch {
     min-width: 44px;
     min-height: 44px;
   }

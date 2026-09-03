@@ -103,7 +103,7 @@ function populateFormatSelect() {
 
     const option = document.createElement("option");
     option.value = format.id;
-    const sizeStr = format.filesize ? ` — ${formatFileSize(format.filesize)}` : "";
+    const sizeStr = format.filesize ? ` (${formatFileSize(format.filesize)})` : "";
     option.textContent = format.label + sizeStr;
     option.dataset.format = JSON.stringify(format);
     group.appendChild(option);
