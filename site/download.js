@@ -43,14 +43,14 @@ function writeCache(release) {
 function setCta(url, label) {
   const btn = document.getElementById("downloadBtn");
   btn.href = url;
-  btn.textContent = label;
+  document.getElementById("downloadBtnLabel").textContent = label;
   btn.classList.remove("is-loading");
 }
 
 function setFallback() {
   const btn = document.getElementById("downloadBtn");
   btn.href = RELEASES_URL;
-  btn.textContent = "Ver todos os downloads no GitHub";
+  document.getElementById("downloadBtnLabel").textContent = "Ver todos os downloads no GitHub";
   btn.classList.remove("is-loading");
   document.getElementById("detectNote").hidden = false;
 }
@@ -62,6 +62,7 @@ function renderSwitcher(release, activeKey) {
     const btn = document.createElement("button");
     btn.type = "button";
     btn.className = "os-pill" + (p.key === activeKey ? " is-active" : "");
+    btn.setAttribute("aria-pressed", String(p.key === activeKey));
     btn.textContent = p.label;
     btn.addEventListener("click", () => selectOS(release, p.key));
     wrap.appendChild(btn);
@@ -71,7 +72,7 @@ function renderSwitcher(release, activeKey) {
 function selectOS(release, key) {
   const picked = release && pickAsset(release.assets, key);
   if (picked) {
-    const versionSuffix = release.version ? ` — ${release.version}` : "";
+    const versionSuffix = release.version ? ` (${release.version})` : "";
     setCta(picked.url, `Baixar para ${picked.label}${versionSuffix}`);
     document.getElementById("detectNote").hidden = true;
   } else {

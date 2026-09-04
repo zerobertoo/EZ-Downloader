@@ -1,13 +1,25 @@
 :root {
   color-scheme: dark;
   --bg: #0b0908;
-  --bg-glow: #1a120a;
-  --ink: #f4ede4;
-  --ink-dim: #a89a8c;
   --accent: #f97316;
   --accent-bright: #fb923c;
-  --surface: #17120d;
-  --border: #2a2019;
+}
+
+/* Mesmos 5 temas do app (src/theme.ts), aplicados via data-theme no :root. */
+:root[data-theme="azure"] { --bg: #07090c; --accent: #38bdf8; --accent-bright: #7dd3fc; }
+:root[data-theme="verdant"] { --bg: #07090b; --accent: #34d399; --accent-bright: #6ee7b7; }
+:root[data-theme="violet"] { --bg: #09080d; --accent: #a78bfa; --accent-bright: #c4b5fd; }
+:root[data-theme="rose"] { --bg: #0a0709; --accent: #fb7185; --accent-bright: #fda4af; }
+
+:root {
+  /* Derivados do accent do tema, como no app: qualquer cor nova herda a
+     mesma linguagem visual sem precisar de um bloco por tema. */
+  --bg-glow: color-mix(in srgb, var(--accent) 10%, #0b0908);
+  --surface: color-mix(in srgb, var(--accent) 4%, #17120d);
+  --border: color-mix(in srgb, var(--accent) 10%, #2a2019);
+  --ink: #f4ede4;
+  --ink-dim: #a89a8c;
+  --on-accent: #100c08;
 }
 
 * {
@@ -34,56 +46,67 @@ body {
   align-items: center;
   justify-content: center;
   gap: 20px;
-  padding: 64px 24px;
+  padding: 56px 24px;
   text-align: center;
   overflow: hidden;
 }
 
 .hero-glow {
   position: absolute;
-  inset: -20% -20% auto -20%;
-  height: 60%;
-  background: radial-gradient(ellipse at center, var(--bg-glow) 0%, transparent 70%);
-  pointer-events: none;
-}
-
-/* Chuva contínua de setas caindo, ecoando a metáfora de download por trás
-   do conteúdo do hero. */
-.download-stream {
-  position: absolute;
   inset: 0;
   overflow: hidden;
   pointer-events: none;
+  background: radial-gradient(ellipse 90% 55% at 50% -10%, var(--bg-glow) 0%, transparent 70%);
 }
 
-.hero > *:not(.hero-glow):not(.download-stream) {
+.hero-glow::before,
+.hero-glow::after {
+  content: "";
+  position: absolute;
+  width: min(66vw, 640px);
+  aspect-ratio: 1;
+  border-radius: 50%;
+  filter: blur(90px);
+  will-change: transform;
+}
+
+.hero-glow::before {
+  top: -22%;
+  left: -12%;
+  background: radial-gradient(circle, color-mix(in srgb, var(--accent) 34%, transparent), transparent 68%);
+  animation: blob-drift-a 24s ease-in-out infinite alternate;
+}
+
+.hero-glow::after {
+  bottom: -28%;
+  right: -14%;
+  background: radial-gradient(circle, color-mix(in srgb, var(--accent-bright) 26%, transparent), transparent 68%);
+  animation: blob-drift-b 31s ease-in-out infinite alternate;
+}
+
+/* Só translate: mudar a escala de uma camada borrada obriga o compositor a
+   re-rasterizar o blur de 90px em todo frame. */
+@keyframes blob-drift-a {
+  from {
+    transform: translate3d(0, 0, 0);
+  }
+  to {
+    transform: translate3d(14vw, 9vh, 0);
+  }
+}
+
+@keyframes blob-drift-b {
+  from {
+    transform: translate3d(0, 0, 0);
+  }
+  to {
+    transform: translate3d(-12vw, -8vh, 0);
+  }
+}
+
+.hero > *:not(.hero-glow) {
   position: relative;
   z-index: 1;
-}
-
-.stream-chevron {
-  position: absolute;
-  top: -10%;
-  width: 18px;
-  height: 9px;
-  color: var(--accent);
-  opacity: 0;
-  animation: stream-fall linear infinite;
-}
-
-.stream-chevron:nth-child(1) { left: 8%; animation-duration: 7s; animation-delay: 0s; }
-.stream-chevron:nth-child(2) { left: 22%; animation-duration: 9s; animation-delay: 1.4s; }
-.stream-chevron:nth-child(3) { left: 38%; animation-duration: 6.5s; animation-delay: 3s; }
-.stream-chevron:nth-child(4) { left: 55%; animation-duration: 8s; animation-delay: 0.6s; }
-.stream-chevron:nth-child(5) { left: 68%; animation-duration: 7.5s; animation-delay: 4s; }
-.stream-chevron:nth-child(6) { left: 82%; animation-duration: 9.5s; animation-delay: 2.2s; }
-.stream-chevron:nth-child(7) { left: 92%; animation-duration: 6.8s; animation-delay: 5s; }
-
-@keyframes stream-fall {
-  0% { transform: translateY(0); opacity: 0; }
-  8% { opacity: 0.5; }
-  85% { opacity: 0.35; }
-  100% { transform: translateY(110vh); opacity: 0; }
 }
 
 .brand {
@@ -95,6 +118,79 @@ body {
   font-size: 0.95rem;
 }
 
+.theme-picker {
+  position: fixed;
+  bottom: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 30;
+  display: flex;
+  gap: 6px;
+  padding: 6px;
+  border-radius: 999px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
+}
+
+.theme-swatch {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  padding: 0;
+  cursor: pointer;
+  transition: transform 0.15s ease, border-color 0.15s ease;
+}
+
+.theme-swatch:hover {
+  transform: scale(1.1);
+}
+
+.theme-swatch:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+
+.theme-swatch.is-active {
+  border-color: var(--ink);
+  box-shadow: 0 0 0 2px var(--surface);
+}
+
+@media (pointer: coarse) {
+  .theme-swatch {
+    min-width: 44px;
+    min-height: 44px;
+  }
+}
+
+/* Troca de tema: círculo na cor escolhida cresce a partir do swatch clicado
+   e varre a tela, com as cores do site trocando por baixo enquanto ele passa.
+   Cor sólida e só transform/opacity animados, pra manter tudo na GPU.
+   z-index 0: passa por cima do fundo, mas SEMPRE por baixo do conteúdo
+   (z-index 1) e do seletor (z-index 30), então nada some da tela. */
+.theme-circle {
+  position: fixed;
+  z-index: 0;
+  width: 300px;
+  height: 300px;
+  border-radius: 50%;
+  pointer-events: none;
+  transform: translate(-50%, -50%) scale(0);
+  will-change: transform, opacity;
+  transition: transform 850ms cubic-bezier(0.77, 0, 0.175, 1), opacity 300ms ease-out;
+}
+
+.theme-circle.is-animating {
+  transform: translate(-50%, -50%) scale(var(--scale));
+}
+
+/* Dissolve no fim, já com o tema real aplicado por baixo: evita o corte seco
+   de "tela cheia de cor" pra página. */
+.theme-circle.is-fading {
+  opacity: 0;
+}
+
 .brand-icon {
   display: flex;
   align-items: center;
@@ -103,12 +199,12 @@ body {
   height: 26px;
   border-radius: 7px;
   background: var(--accent);
-  color: #100c08;
+  color: var(--on-accent);
 }
 
 .headline {
   margin: 0;
-  font-size: clamp(2.2rem, 6vw, 3.6rem);
+  font-size: clamp(2.1rem, 6vw, 3.4rem);
   line-height: 1.12;
   font-weight: 800;
   letter-spacing: -0.02em;
@@ -119,32 +215,150 @@ body {
 }
 
 .subhead {
-  max-width: 46ch;
+  max-width: 44ch;
   margin: 0;
   color: var(--ink-dim);
   font-size: 1.05rem;
   line-height: 1.5;
 }
 
+.steps {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  max-width: 640px;
+  margin: 12px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.step {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  width: 148px;
+}
+
+.step-badge {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: var(--on-accent);
+  font-size: 0.75rem;
+  font-weight: 800;
+}
+
+.step-icon {
+  color: var(--accent-bright);
+}
+
+.step-label {
+  color: var(--ink-dim);
+  font-size: 0.85rem;
+  line-height: 1.35;
+}
+
+.step-connector {
+  flex: 1;
+  min-width: 28px;
+  max-width: 56px;
+  height: 2px;
+  margin: 0 4px 34px;
+  border-radius: 999px;
+  background: var(--border);
+  position: relative;
+  overflow: hidden;
+}
+
+.step-dot {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+  /* translate em vez de left: 'left' é propriedade de layout e forçava
+     reflow a cada frame, em loop infinito. */
+  animation: step-flow 2.4s ease-in-out infinite;
+}
+
+.step-connector:nth-of-type(2) .step-dot {
+  animation-delay: 1.2s;
+}
+
+@keyframes step-flow {
+  0% {
+    transform: translate(-8px, -50%);
+    opacity: 0;
+  }
+  15% {
+    opacity: 1;
+  }
+  85% {
+    opacity: 1;
+  }
+  100% {
+    /* 64px cobre a largura máxima do conector (56px); o que passar disso
+       é cortado pelo overflow: hidden. */
+    transform: translate(64px, -50%);
+    opacity: 0;
+  }
+}
+
+@media (max-width: 640px) {
+  .steps {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 14px;
+    max-width: 280px;
+  }
+  .step {
+    flex-direction: row;
+    width: auto;
+    text-align: left;
+    gap: 12px;
+  }
+  .step-label {
+    text-align: left;
+  }
+  .step-connector {
+    display: none;
+  }
+}
+
 .download-btn {
   display: inline-flex;
   align-items: center;
   gap: 10px;
-  margin-top: 12px;
+  margin-top: 14px;
   padding: 16px 28px;
   border-radius: 12px;
   background: var(--accent);
-  color: #100c08;
+  color: var(--on-accent);
   font-weight: 700;
   font-size: 1.05rem;
   text-decoration: none;
-  box-shadow: 0 8px 24px -8px rgba(249, 115, 22, 0.55);
+  /* Halo derivado do accent do tema. Antes era o laranja do ember fixo,
+     o que deixava um brilho laranja embaixo do botão nos outros 4 temas. */
+  box-shadow: 0 8px 24px -8px color-mix(in srgb, var(--accent) 55%, transparent);
   transition: transform 0.15s ease, box-shadow 0.15s ease;
 }
 
 .download-btn:hover {
   transform: translateY(-1px);
-  box-shadow: 0 12px 28px -8px rgba(249, 115, 22, 0.65);
+  box-shadow: 0 12px 28px -8px color-mix(in srgb, var(--accent) 65%, transparent);
+}
+
+.download-btn:focus-visible {
+  outline: 2px solid var(--accent-bright);
+  outline-offset: 3px;
 }
 
 .download-btn.is-loading {
@@ -158,14 +372,24 @@ body {
 }
 
 @keyframes icon-bob {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(3px); }
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(3px);
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .stream-chevron,
-  .download-btn-icon {
+  .download-btn-icon,
+  .step-dot,
+  .hero-glow::before,
+  .hero-glow::after {
     animation: none;
+  }
+  .step-dot {
+    opacity: 0;
   }
 }
 
@@ -188,7 +412,8 @@ body {
   background: var(--surface);
   color: var(--ink-dim);
   border-radius: 999px;
-  padding: 7px 14px;
+  padding: 11px 16px;
+  min-height: 44px;
   font-size: 0.85rem;
   cursor: pointer;
   transition: border-color 0.15s ease, color 0.15s ease;
@@ -199,6 +424,11 @@ body {
   color: var(--ink);
 }
 
+.os-pill:focus-visible {
+  outline: 2px solid var(--accent-bright);
+  outline-offset: 2px;
+}
+
 .os-pill.is-active {
   border-color: var(--accent);
   color: var(--accent-bright);
@@ -206,7 +436,7 @@ body {
 }
 
 .footer {
-  margin-top: 40px;
+  margin-top: 36px;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -225,4 +455,76 @@ body {
 
 .footer-dot {
   opacity: 0.5;
+}
+
+/* ── Fundo animado ──────────────────────────────────────────── */
+/* Canvas com o fluxo de download (background.js). O background do próprio
+   elemento faz a camada base, na mesma composição do #app (src/styles.css). */
+.bg-canvas {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse 70% 35% at 50% -2%, color-mix(in srgb, var(--accent) 9%, transparent) 0%, transparent 60%),
+    radial-gradient(ellipse 45% 25% at 85% 90%, rgba(80, 40, 180, 0.05) 0%, transparent 55%);
+}
+
+/* ── Card de ação ───────────────────────────────────────────── */
+/* Vidro sobre a rede animada: agrupa passos, CTA e seletor de sistema num
+   bloco só, com a mesma linguagem do .input-card do app (borda, fio de accent
+   no topo, blur). A headline fica fora, solta no fundo. */
+.action-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 18px;
+  width: min(100%, 620px);
+  margin-top: 6px;
+  padding: 30px 32px 26px;
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  background: color-mix(in srgb, var(--accent) 7%, rgba(10, 8, 7, 0.4));
+  backdrop-filter: blur(14px) saturate(1.5);
+  -webkit-backdrop-filter: blur(14px) saturate(1.5);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.04) inset,
+    0 18px 48px rgba(0, 0, 0, 0.42);
+}
+
+/* Sem backdrop-filter o vidro vira só um retângulo transparente: aí é melhor
+   fechar o fundo pra o texto não competir com a rede. */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .action-card {
+    background: color-mix(in srgb, var(--accent) 6%, rgba(10, 8, 7, 0.92));
+  }
+}
+
+.action-card::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 15%;
+  right: 15%;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in srgb, var(--accent) 70%, transparent) 35%,
+    color-mix(in srgb, var(--accent) 70%, transparent) 65%,
+    transparent
+  );
+}
+
+/* O espaçamento agora é o gap do card. */
+.action-card .steps,
+.action-card .download-btn {
+  margin-top: 0;
+}
+
+@media (max-width: 640px) {
+  .action-card {
+    padding: 24px 20px 22px;
+  }
 }
