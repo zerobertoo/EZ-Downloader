@@ -91,11 +91,15 @@
           <span id="downloadBtnLabel" aria-live="polite">Preparando seu download...</span>
         </a>
 
+        <p id="downloadHint" class="download-hint" aria-live="polite"></p>
+
         <p id="detectNote" class="detect-note" hidden>
           Não identificamos seu sistema automaticamente. Escolha o seu abaixo:
         </p>
 
-        <div id="osSwitcher" class="os-switcher" role="group" aria-label="Escolher sistema operacional"></div>
+        <button type="button" id="osToggle" class="os-toggle" hidden>Não é o seu sistema?</button>
+
+        <div id="osSwitcher" class="os-switcher" hidden role="group" aria-label="Escolher sistema operacional"></div>
       </section>
 
       <footer class="footer">

@@ -123,11 +123,31 @@ function setTheme(id, swatch) {
 
 /* Os swatches são criados uma vez só. Trocar de tema apenas alterna classe e
    aria: reconstruir os 5 botões no meio da animação custava layout + paint
-   justo no frame em que o tema já estava repintando a página inteira. */
+   justo no frame em que o tema já estava repintando a página inteira.
+
+   O picker fica recolhido atrás de um botão de alternância (mesmo padrão
+   aria-pressed do os-switcher, em vez do antigo role="radio"): a cor não é
+   uma decisão que o visitante precisa resolver antes do download, então não
+   compete o tempo todo com o CTA por atenção. */
 function renderSwatches() {
   const wrap = document.getElementById("themePicker");
   if (!wrap) return;
   const active = currentThemeId();
+
+  const toggle = document.createElement("button");
+  toggle.type = "button";
+  toggle.className = "theme-toggle";
+  toggle.setAttribute("aria-expanded", "false");
+  toggle.setAttribute("aria-label", "Escolher tema de cor");
+  toggle.addEventListener("click", () => {
+    const open = wrap.classList.toggle("is-open");
+    toggle.setAttribute("aria-expanded", String(open));
+  });
+  wrap.appendChild(toggle);
+
+  const list = document.createElement("div");
+  list.className = "theme-swatches";
+  wrap.appendChild(list);
 
   for (const theme of THEMES) {
     const swatch = document.createElement("button");
@@ -135,12 +155,11 @@ function renderSwatches() {
     swatch.className = "theme-swatch" + (theme.id === active ? " is-active" : "");
     swatch.dataset.theme = theme.id;
     swatch.style.background = `linear-gradient(135deg, ${theme.accent}, ${theme.accentBright})`;
-    swatch.setAttribute("role", "radio");
-    swatch.setAttribute("aria-checked", String(theme.id === active));
+    swatch.setAttribute("aria-pressed", String(theme.id === active));
     swatch.setAttribute("aria-label", theme.label);
     swatch.title = theme.label;
     swatch.addEventListener("click", () => setTheme(theme.id, swatch));
-    wrap.appendChild(swatch);
+    list.appendChild(swatch);
   }
 }
 
@@ -149,7 +168,7 @@ function updateActiveSwatch() {
   for (const swatch of document.querySelectorAll(".theme-swatch")) {
     const isActive = swatch.dataset.theme === active;
     swatch.classList.toggle("is-active", isActive);
-    swatch.setAttribute("aria-checked", String(isActive));
+    swatch.setAttribute("aria-pressed", String(isActive));
   }
 }
 

@@ -118,19 +118,57 @@ body {
   font-size: 0.95rem;
 }
 
+/* Fica num canto, fora do fluxo de decisão do download: a cor é preferência,
+   não passo do fluxo, então não deve competir com o CTA nem com o seletor de
+   SO por espaço ou atenção (ainda mais no mobile, onde os três disputariam a
+   mesma faixa inferior da tela). */
 .theme-picker {
   position: fixed;
-  bottom: 16px;
-  left: 50%;
-  transform: translateX(-50%);
+  top: 16px;
+  right: 16px;
   z-index: 30;
   display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.theme-toggle {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 2px solid var(--border);
+  background: var(--accent);
+  padding: 0;
+  cursor: pointer;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.35);
+  transition: transform 0.15s ease;
+}
+
+.theme-toggle:hover {
+  transform: scale(1.08);
+}
+
+.theme-toggle:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+
+.theme-swatches {
+  display: none;
+  flex-wrap: wrap;
+  justify-content: flex-end;
   gap: 6px;
   padding: 6px;
-  border-radius: 999px;
+  max-width: 200px;
+  border-radius: 14px;
   background: var(--surface);
   border: 1px solid var(--border);
   box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
+}
+
+.theme-picker.is-open .theme-swatches {
+  display: flex;
 }
 
 .theme-swatch {
@@ -161,6 +199,10 @@ body {
   .theme-swatch {
     min-width: 44px;
     min-height: 44px;
+  }
+  .theme-toggle {
+    width: 44px;
+    height: 44px;
   }
 }
 
@@ -393,10 +435,35 @@ body {
   }
 }
 
+.download-hint {
+  margin: 0;
+  max-width: 46ch;
+  color: var(--ink-dim);
+  font-size: 0.8rem;
+  line-height: 1.4;
+  min-height: 1em;
+}
+
 .detect-note {
   margin: 0;
   color: var(--ink-dim);
   font-size: 0.9rem;
+}
+
+.os-toggle {
+  border: none;
+  background: none;
+  padding: 4px 0;
+  color: var(--ink-dim);
+  font-size: 0.85rem;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+.os-toggle:hover,
+.os-toggle:focus-visible {
+  color: var(--accent-bright);
 }
 
 .os-switcher {
@@ -433,6 +500,15 @@ body {
   border-color: var(--accent);
   color: var(--accent-bright);
   background: color-mix(in srgb, var(--accent) 12%, var(--surface));
+}
+
+/* Formatos alternativos da mesma família de SO (ex: .deb/.rpm ao lado do
+   AppImage): o código já escolhe um padrão sensato, então essas opções
+   pesam menos visualmente em vez de competir de igual pra igual. */
+.os-pill.is-secondary {
+  padding: 8px 14px;
+  font-size: 0.78rem;
+  opacity: 0.7;
 }
 
 .footer {
