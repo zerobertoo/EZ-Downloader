@@ -35,6 +35,8 @@ Acesse a página de [Releases](https://github.com/zerobertoo/EZ-Downloader/relea
 
 > Não é necessário instalar o yt-dlp nem o ffmpeg — tudo já vem embutido.
 
+> ⚠️ **No Windows, o Chrome ou o SmartScreen podem avisar que o arquivo "não é baixado com frequência" ou é "malicioso".** É falso positivo: o app não tem certificado de assinatura de código (custa caro, é um projeto pessoal e gratuito), e não porque contenha algo malicioso. Pra baixar/instalar mesmo assim: no aviso do Chrome, clique em "Mostrar mais" → "Manter mesmo assim"; no SmartScreen, clique em "Mais informações" → "Executar assim mesmo".
+
 ---
 
 ## 🚀 Como usar
