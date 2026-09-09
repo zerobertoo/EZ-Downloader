@@ -4,7 +4,7 @@
 
 **Baixe vídeos e áudios de qualquer lugar, sem complicação.**
 
-Interface gráfica moderna para o [yt-dlp](https://github.com/yt-dlp/yt-dlp) — sem linha de comando, sem configuração, sem dependências para instalar.
+Interface gráfica moderna para o [yt-dlp](https://github.com/yt-dlp/yt-dlp), sem linha de comando, sem configuração, sem dependências para instalar.
 
 [![Licença MIT](https://img.shields.io/badge/licen%C3%A7a-MIT-orange?style=flat-square)](LICENSE)
 [![Plataformas](https://img.shields.io/badge/plataformas-Windows%20%7C%20macOS%20%7C%20Linux-blue?style=flat-square)](#-instalação)
@@ -16,7 +16,7 @@ Interface gráfica moderna para o [yt-dlp](https://github.com/yt-dlp/yt-dlp) —
 
 ## ✨ O que é?
 
-EZ Downloader é um aplicativo desktop que coloca o poder do **yt-dlp** em uma interface simples e bonita. Cole uma URL, escolha o formato e clique em baixar — é só isso.
+EZ Downloader é um aplicativo desktop que coloca o poder do **yt-dlp** em uma interface simples e bonita. Cole uma URL, escolha o formato e clique em baixar, é só isso.
 
 Funciona com **YouTube, TikTok, Instagram, Twitter/X, Twitch, Facebook** e mais de **1000 outros sites**.
 
@@ -33,7 +33,7 @@ Acesse a página de [Releases](https://github.com/zerobertoo/EZ-Downloader/relea
 | macOS Apple Silicon | `.dmg` (ARM64) |
 | Linux | `.deb`, `.rpm` ou `.AppImage` |
 
-> Não é necessário instalar o yt-dlp nem o ffmpeg — tudo já vem embutido.
+> Não é necessário instalar o yt-dlp nem o ffmpeg, tudo já vem embutido.
 
 > ⚠️ **No Windows, o Chrome ou o SmartScreen podem avisar que o arquivo "não é baixado com frequência" ou é "malicioso".** É falso positivo: o app não tem certificado de assinatura de código (custa caro, é um projeto pessoal e gratuito), e não porque contenha algo malicioso. Pra baixar/instalar mesmo assim: no aviso do Chrome, clique em "Mostrar mais" → "Manter mesmo assim"; no SmartScreen, clique em "Mais informações" → "Executar assim mesmo".
 
@@ -43,7 +43,7 @@ Acesse a página de [Releases](https://github.com/zerobertoo/EZ-Downloader/relea
 
 1. **Cole a URL** do vídeo que deseja baixar
 2. Clique em **Buscar** e aguarde carregar as informações
-3. **Escolha o formato** — melhor qualidade, resolução específica ou só o áudio
+3. **Escolha o formato** (melhor qualidade, resolução específica ou só o áudio)
 4. Selecione a **pasta de destino**
 5. Clique em **Iniciar Download** e acompanhe o progresso em tempo real
 
@@ -51,12 +51,12 @@ Acesse a página de [Releases](https://github.com/zerobertoo/EZ-Downloader/relea
 
 ## ⚙️ Funcionalidades
 
-- 🎞️ **Múltiplos formatos** — vídeo em várias resoluções, áudio em MP3/M4A e mais
-- ⚡ **Progresso em tempo real** — percentual, velocidade e tempo restante
-- 🗂️ **Seleção de pasta** — escolha onde salvar cada download
-- 🌐 **+1000 sites suportados** — qualquer plataforma que o yt-dlp suporte
-- 📦 **Zero dependências** — yt-dlp e ffmpeg já estão incluídos no app
-- 🖥️ **Multiplataforma** — Windows, macOS (Intel e Apple Silicon) e Linux
+- 🎞️ **Múltiplos formatos**: vídeo em várias resoluções, áudio em MP3/M4A e mais
+- ⚡ **Progresso em tempo real**: percentual, velocidade e tempo restante
+- 🗂️ **Seleção de pasta**: escolha onde salvar cada download
+- 🌐 **+1000 sites suportados**: qualquer plataforma que o yt-dlp suporte
+- 📦 **Zero dependências**: yt-dlp e ffmpeg já estão incluídos no app
+- 🖥️ **Multiplataforma**: Windows, macOS (Intel e Apple Silicon) e Linux
 
 ---
 
@@ -68,8 +68,8 @@ Acesse a página de [Releases](https://github.com/zerobertoo/EZ-Downloader/relea
 ### Pré-requisitos
 
 - **Node.js** 18+
-- **Rust** (via [rustup](https://rustup.rs/)) — o backend é uma app Tauri
-- Dependências de sistema do Tauri — no Linux (Ubuntu/Debian): `libwebkit2gtk-4.1-dev build-essential curl wget file libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev` (ver [pré-requisitos oficiais](https://tauri.app/start/prerequisites/) para Windows/macOS)
+- **Rust** (via [rustup](https://rustup.rs/)), o backend é uma app Tauri
+- Dependências de sistema do Tauri no Linux (Ubuntu/Debian): `libwebkit2gtk-4.1-dev build-essential curl wget file libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev` (ver [pré-requisitos oficiais](https://tauri.app/start/prerequisites/) para Windows/macOS)
 - **yt-dlp** e **ffmpeg** no PATH (em produção são embutidos pelo build via `resources/bin/<platform>/`)
 
 ### Setup
