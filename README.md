@@ -119,20 +119,6 @@ Logs de runtime ficam no diretório de logs do app (via `tauri-plugin-log`): `~/
 
 O `yt-dlp` e o `ffmpeg` ficam em `resources/bin/<platform>/`, baixados por `scripts/download-yt-dlp.cjs` e embutidos como resources do Tauri (ver `bundle.resources` em `src-tauri/tauri.conf.json`).
 
-### Publicando uma release
-
-Releases são 100% automatizadas via GitHub Actions:
-
-1. Vá em **GitHub → Actions → Release → Run workflow**
-2. Informe a versão (ex: `1.7.0` ou `1.7.0-beta.1`)
-3. O workflow faz o bump no `package.json`, cria a tag e publica os binários para todas as plataformas automaticamente
-
-> ⚠️ Nunca crie tags nem edite a versão no `package.json` manualmente.
-
-Versões com sufixo `-` (ex: `1.7.0-beta.1`) são marcadas automaticamente como pré-release.
-
-</details>
-
 ---
 
 ## 📄 Licença
