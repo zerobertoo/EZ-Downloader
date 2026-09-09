@@ -139,13 +139,13 @@ pub fn classify_ytdlp_error(stderr: &str) -> String {
         return "Vídeo indisponível ou privado.".to_string();
     }
     if stderr.contains("Sign in") {
-        return "Este conteúdo requer autenticação.".to_string();
+        return "Este conteúdo requer autenticação. Selecione \"usar cookies do navegador\" nas opções e tente de novo.".to_string();
     }
     if stderr.contains("not installed") {
         return "Erro ao processar o vídeo: ffmpeg não encontrado.".to_string();
     }
     if stderr.contains("HTTP Error 403") {
-        return "O YouTube bloqueou este download (Erro 403). O app já tenta de novo automaticamente usando os cookies do Chrome; se persistir, faça login no YouTube pelo Chrome e tente de novo.".to_string();
+        return "O YouTube bloqueou este download (Erro 403). Faça login no YouTube pelo Chrome, selecione \"usar cookies do navegador\" nas opções e tente de novo.".to_string();
     }
     if stderr.contains("nsig extraction failed")
         || stderr.contains("Unable to obtain nsig")

@@ -391,9 +391,6 @@ impl DownloadManager {
         args.push("--no-warnings".to_string());
         args.push("--encoding".to_string());
         args.push("utf-8".to_string());
-        let cookies_already_set = args
-            .iter()
-            .any(|a| a == "--cookies-from-browser" || a == "--cookies");
         args.push(url.to_string());
 
         let ytdlp_bin = self.current_ytdlp_bin();
@@ -427,7 +424,7 @@ impl DownloadManager {
                 .join()
                 .map_err(|_| "Erro interno ao aguardar processo".to_string())
                 .and_then(|r| r);
-            let mut stderr_text = output.as_ref().ok().map(|o| o.stderr.clone());
+            let stderr_text = output.as_ref().ok().map(|o| o.stderr.clone());
 
             let was_cancelled = manager.cancelled.lock().unwrap().remove(&finish_id);
             let (mut status, mut path, mut error) =
@@ -457,7 +454,6 @@ impl DownloadManager {
                             .join()
                             .map_err(|_| "Erro interno ao aguardar processo".to_string())
                             .and_then(|r| r);
-                        stderr_text = retry_output.as_ref().ok().map(|o| o.stderr.clone());
                         let retry_cancelled = manager.cancelled.lock().unwrap().remove(&finish_id);
                         let (s, p, e) = final_status(retry_output, retry_cancelled, &output_dir);
                         status = s;
@@ -465,41 +461,6 @@ impl DownloadManager {
                         error = e;
                     }
                     Err(e) => log::error!("Falha ao tentar novamente sem --remote-components: {e}"),
-                }
-            }
-
-            // YouTube às vezes exige prova de humano ("Sign in to confirm
-            // you're not a bot") ou corta o download no meio com HTTP 403
-            // (PO Token ausente). Sem retry, todo download falha até o
-            // usuário descobrir e digitar --cookies-from-browser manualmente
-            // no campo de argumentos extras — tenta uma vez sozinho antes de
-            // desistir, reaproveitando cookies do Chrome já logado.
-            if status == "failed"
-                && !cookies_already_set
-                && stderr_text.as_deref().is_some_and(is_bot_check_error)
-            {
-                log::info!(
-                    "Download {finish_id} bloqueado (anti-bot ou 403), tentando novamente com cookies do navegador"
-                );
-                let retry_args = with_cookies_from_browser(&current_args, "chrome");
-                match spawn_attempt(&finish_app, &ytdlp_bin, &retry_args, &finish_id) {
-                    Ok((handle, retry_join)) => {
-                        manager
-                            .active
-                            .lock()
-                            .unwrap()
-                            .insert(finish_id.clone(), handle);
-                        let retry_output = retry_join
-                            .join()
-                            .map_err(|_| "Erro interno ao aguardar processo".to_string())
-                            .and_then(|r| r);
-                        let retry_cancelled = manager.cancelled.lock().unwrap().remove(&finish_id);
-                        let (s, p, e) = final_status(retry_output, retry_cancelled, &output_dir);
-                        status = s;
-                        path = p;
-                        error = e;
-                    }
-                    Err(e) => log::error!("Falha ao tentar novamente com cookies: {e}"),
                 }
             }
 
@@ -698,24 +659,6 @@ fn spawn_attempt(
     spawn_process(ytdlp_bin, args, None, on_stdout, on_stderr)
 }
 
-/// Casos em que --cookies-from-browser (sessão já logada) costuma resolver
-/// sozinho: a mensagem fixa de "prova de humano" do YouTube, e o HTTP 403 que
-/// aparece no meio de um download grande — sintoma de PO Token ausente (ver
-/// comentário de EJS_ARGS acima; o app ainda não gera PO Token de verdade,
-/// só cookies de uma conta logada contornam esse corte de forma confiável).
-fn is_bot_check_error(stderr: &str) -> bool {
-    stderr.contains("Sign in to confirm you're not a bot") || stderr.contains("HTTP Error 403")
-}
-
-fn with_cookies_from_browser(args: &[String], browser: &str) -> Vec<String> {
-    // url é sempre o último elemento (empurrado por último em start_download).
-    let mut retry = args[..args.len() - 1].to_vec();
-    retry.push("--cookies-from-browser".to_string());
-    retry.push(browser.to_string());
-    retry.push(args[args.len() - 1].clone());
-    retry
-}
-
 /// Traduz o resultado do processo pro status final do download:
 /// exit 0 → "done"; exit != 0 marcado como cancelado → "cancelled";
 /// exit != 0 espontâneo → "failed" com a mensagem classificada do stderr.
@@ -735,41 +678,6 @@ fn final_status(
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn detects_bot_check_error() {
-        assert!(is_bot_check_error(
-            "ERROR: [youtube] xyz: Sign in to confirm you're not a bot. Use --cookies-from-browser..."
-        ));
-        assert!(!is_bot_check_error("ERROR: Video unavailable"));
-    }
-
-    #[test]
-    fn detects_mid_download_403_as_cookies_retryable() {
-        assert!(is_bot_check_error(
-            "ERROR: unable to download video data: HTTP Error 403: Forbidden"
-        ));
-    }
-
-    #[test]
-    fn inserts_cookies_flag_before_trailing_url() {
-        let args = vec![
-            "-f".to_string(),
-            "best".to_string(),
-            "https://x/y".to_string(),
-        ];
-        let retry = with_cookies_from_browser(&args, "chrome");
-        assert_eq!(
-            retry,
-            vec![
-                "-f".to_string(),
-                "best".to_string(),
-                "--cookies-from-browser".to_string(),
-                "chrome".to_string(),
-                "https://x/y".to_string(),
-            ]
-        );
-    }
 
     #[test]
     fn extra_args_accepts_allowlisted_boolean_flag() {
