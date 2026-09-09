@@ -106,6 +106,10 @@ jobs:
       - name: Install Linux system dependencies
         if: matrix.platform == 'linux'
         run: |
+          # O repositório do Google Chrome vem pré-configurado na imagem do
+          # runner e não é usado no build; removê-lo evita falhas de
+          # "Hash Sum mismatch" quando o mirror deles está fora de sincronia.
+          sudo rm -f /etc/apt/sources.list.d/google-chrome.list
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential curl wget file \
             libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev
