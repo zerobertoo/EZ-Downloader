@@ -164,10 +164,21 @@ jobs:
             exit 0
           fi
 
-          response=$(curl -s -X POST "https://www.virustotal.com/api/v3/files" \
+          # O endpoint direto /files só aceita até 32MB; o instalador passa
+          # disso (ffmpeg + yt-dlp embutidos), então precisa pedir uma URL de
+          # upload dedicada primeiro (funciona pra qualquer tamanho até 650MB).
+          upload_url=$(curl -s "https://www.virustotal.com/api/v3/files/upload_url" \
+            -H "x-apikey: $VT_API_KEY" | jq -r '.data // empty' 2>/dev/null || true)
+
+          if [ -z "$upload_url" ]; then
+            echo "::warning::Falha ao obter upload_url do VirusTotal."
+            exit 0
+          fi
+
+          response=$(curl -s -X POST "$upload_url" \
             -H "x-apikey: $VT_API_KEY" \
             -F "file=@${installer}")
-          analysis_id=$(echo "$response" | jq -r '.data.id // empty')
+          analysis_id=$(echo "$response" | jq -r '.data.id // empty' 2>/dev/null || true)
 
           if [ -z "$analysis_id" ]; then
             echo "::warning::Falha ao submeter ao VirusTotal: $response"
