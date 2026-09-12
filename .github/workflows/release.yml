@@ -140,3 +140,42 @@ jobs:
           releaseDraft: false
           prerelease: ${{ contains(github.event.inputs.version, '-') }}
           args: --target ${{ matrix.rust-target }}
+
+      # O instalador Windows não é assinado (sem certificado de assinatura de
+      # código) e antivírus com heurística agressiva (ex.: Kaspersky) já
+      # classificaram builds anteriores como falso positivo de trojan. Manda
+      # cada release pro VirusTotal automaticamente pra ter o link de scan à
+      # mão na hora de abrir um pedido de whitelist com o antivírus que pegou.
+      - name: Submit Windows installer to VirusTotal
+        if: matrix.platform == 'win32'
+        continue-on-error: true
+        shell: bash
+        env:
+          VT_API_KEY: ${{ secrets.VIRUSTOTAL_API_KEY }}
+        run: |
+          if [ -z "$VT_API_KEY" ]; then
+            echo "VIRUSTOTAL_API_KEY não configurada nos secrets; pulando submissão." | tee -a "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          installer=$(find src-tauri/target/${{ matrix.rust-target }}/release/bundle/nsis -name '*.exe' | head -n1)
+          if [ -z "$installer" ]; then
+            echo "::warning::Instalador NSIS não encontrado, pulando submissão ao VirusTotal."
+            exit 0
+          fi
+
+          response=$(curl -s -X POST "https://www.virustotal.com/api/v3/files" \
+            -H "x-apikey: $VT_API_KEY" \
+            -F "file=@${installer}")
+          analysis_id=$(echo "$response" | jq -r '.data.id // empty')
+
+          if [ -z "$analysis_id" ]; then
+            echo "::warning::Falha ao submeter ao VirusTotal: $response"
+            exit 0
+          fi
+
+          {
+            echo "### VirusTotal"
+            echo "Instalador enviado para análise: https://www.virustotal.com/gui/file-analysis/${analysis_id}"
+            echo "O scan leva 1-2 minutos. Se algum antivírus marcar como falso positivo, use esse link pra abrir o pedido de whitelist no site do fornecedor."
+          } >> "$GITHUB_STEP_SUMMARY"

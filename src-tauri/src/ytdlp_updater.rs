@@ -1,17 +1,53 @@
+use sha2::{Digest, Sha256};
 use std::fs;
 use std::io::Read;
 use tauri::AppHandle;
 
-/// Asset do GitHub Releases conforme a plataforma — mesmos binários que
-/// `scripts/download-yt-dlp.cjs` baixa no build.
-fn download_url() -> &'static str {
+const SUMS_URL: &str = "https://github.com/yt-dlp/yt-dlp/releases/latest/download/SHA2-256SUMS";
+
+/// Nome do asset no GitHub Releases conforme a plataforma — mesmos binários
+/// que `scripts/download-yt-dlp.cjs` baixa no build, e mesmo nome usado como
+/// chave no arquivo SHA2-256SUMS da release.
+fn asset_name() -> &'static str {
     if cfg!(target_os = "windows") {
-        "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe"
+        "yt-dlp.exe"
     } else if cfg!(target_os = "macos") {
-        "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_macos"
+        "yt-dlp_macos"
     } else {
-        "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp"
+        "yt-dlp"
     }
+}
+
+fn download_url() -> String {
+    format!("https://github.com/yt-dlp/yt-dlp/releases/latest/download/{}", asset_name())
+}
+
+/// Busca o hash esperado no SHA2-256SUMS publicado junto da release, pra
+/// validar o binário baixado antes de executá-lo (evita rodar algo adulterado
+/// por MITM/CDN comprometido, e reduz o padrão "baixa e executa sem checar"
+/// que dispara heurísticas de antivírus tipo trojan-downloader).
+fn parse_sums(sums: &str, asset: &str) -> Option<String> {
+    sums.lines().find_map(|line| {
+        let (hash, name) = line.split_once("  ")?;
+        (name.trim() == asset).then(|| hash.trim().to_lowercase())
+    })
+}
+
+fn expected_sha256(asset: &str) -> Result<String, String> {
+    let response = ureq::get(SUMS_URL)
+        .call()
+        .map_err(|e| format!("Erro ao baixar SHA2-256SUMS: {e}"))?;
+    let sums = response
+        .into_string()
+        .map_err(|e| format!("Erro ao ler SHA2-256SUMS: {e}"))?;
+
+    parse_sums(&sums, asset)
+        .ok_or_else(|| format!("Hash de {asset} não encontrado em SHA2-256SUMS"))
+}
+
+fn sha256_hex(bytes: &[u8]) -> String {
+    let digest = Sha256::digest(bytes);
+    digest.iter().map(|b| format!("{b:02x}")).collect()
 }
 
 /// Baixa o yt-dlp mais recente para o diretório de dados do app e retorna a
@@ -31,7 +67,7 @@ pub fn update(app: &AppHandle) -> Result<String, String> {
     let tmp = dest.with_extension("download");
 
     log::info!("Baixando yt-dlp de {}", download_url());
-    let response = ureq::get(download_url())
+    let response = ureq::get(&download_url())
         .call()
         .map_err(|e| format!("Erro ao baixar yt-dlp: {e}"))?;
 
@@ -46,6 +82,15 @@ pub fn update(app: &AppHandle) -> Result<String, String> {
     if bytes.is_empty() {
         return Err("Download do yt-dlp veio vazio".to_string());
     }
+
+    let expected = expected_sha256(asset_name())?;
+    let actual = sha256_hex(&bytes);
+    if actual != expected {
+        return Err(format!(
+            "Hash do yt-dlp baixado não confere (esperado {expected}, obtido {actual}) — download descartado"
+        ));
+    }
+
     fs::write(&tmp, &bytes).map_err(|e| format!("Erro ao salvar yt-dlp: {e}"))?;
 
     #[cfg(unix)]
@@ -88,5 +133,21 @@ mod tests {
         } else {
             assert!(url.ends_with("/yt-dlp"));
         }
+    }
+
+    #[test]
+    fn parse_sums_acha_hash_pelo_nome_exato_do_asset() {
+        let sums = "aaa  yt-dlp\nbbb  yt-dlp.exe\nccc  yt-dlp_macos\n";
+        assert_eq!(parse_sums(sums, "yt-dlp.exe"), Some("bbb".to_string()));
+        assert_eq!(parse_sums(sums, "yt-dlp"), Some("aaa".to_string()));
+        assert_eq!(parse_sums(sums, "yt-dlp_ausente"), None);
+    }
+
+    #[test]
+    fn sha256_hex_bate_com_hash_conhecido() {
+        assert_eq!(
+            sha256_hex(b""),
+            "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        );
     }
 }
