@@ -19,7 +19,10 @@ fn asset_name() -> &'static str {
 }
 
 fn download_url() -> String {
-    format!("https://github.com/yt-dlp/yt-dlp/releases/latest/download/{}", asset_name())
+    format!(
+        "https://github.com/yt-dlp/yt-dlp/releases/latest/download/{}",
+        asset_name()
+    )
 }
 
 /// Busca o hash esperado no SHA2-256SUMS publicado junto da release, pra
