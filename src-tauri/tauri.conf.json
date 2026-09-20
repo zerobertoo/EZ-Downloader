@@ -27,6 +27,11 @@
   "bundle": {
     "active": true,
     "createUpdaterArtifacts": true,
+    "publisher": "EZ Downloader",
+    "copyright": "Copyright (c) 2026 EZ Downloader. MIT License.",
+    "homepage": "https://github.com/zerobertoo/EZ-Downloader",
+    "shortDescription": "Interface gráfica para o yt-dlp",
+    "longDescription": "Aplicativo desktop open source (MIT) que oferece uma interface gráfica para o yt-dlp e o ffmpeg.",
     "targets": ["deb", "rpm", "appimage", "nsis", "dmg", "app"],
     "icon": [
       "icons/32x32.png",
@@ -40,7 +45,8 @@
     },
     "windows": {
       "nsis": {
-        "installerIcon": "icons/icon.ico"
+        "installerIcon": "icons/icon.ico",
+        "installMode": "currentUser"
       }
     }
   },
