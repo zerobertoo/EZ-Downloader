@@ -76,7 +76,7 @@ function displayVideoMetadata() {
 function showThumbnailPlaceholder() {
   if (!elements.videoThumbnail) return;
   elements.videoThumbnail.src =
-    "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 320 180'%3E%3Crect fill='%23333' width='320' height='180'/%3E%3Cpath fill='%23666' d='M145 85l45 27v-54z'/%3E%3C/svg%3E";
+    "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 320 180'%3E%3Crect fill='%23333' width='320' height='180'/%3E%3Cpath fill='%23666' d='M140 60l55 30-55 30z'/%3E%3C/svg%3E";
 }
 
 const FORMAT_GROUP_LABEL: Record<FormatOption["type"], string> = {

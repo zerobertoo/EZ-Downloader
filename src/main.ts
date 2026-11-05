@@ -4,7 +4,13 @@ import { initTheme } from "./theme";
 import { PATH_STORAGE_KEY, UI_STRINGS, elements, state } from "./state";
 import { renderPlaylistHint, toggle } from "./utils";
 import { handleDownload, handleQuickDownload, resetAdvancedPlaylistConfirm, resetQuickPlaylistConfirm } from "./download";
-import { handleDownloadFinished, initDownloadsUI, updateDownloadProgress } from "./downloads";
+import {
+  handleConversionFinished,
+  handleDownloadFinished,
+  initDownloadsUI,
+  updateConversionProgress,
+  updateDownloadProgress,
+} from "./downloads";
 import { appendDebugLine, showDebugCommand, toggleNerdMode } from "./ui/debug";
 import { handleSelectPath, updateDownloadPathDisplay } from "./ui/destination";
 import { clearFieldError, setFieldError } from "./ui/feedback";
@@ -54,7 +60,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
   });
 
-  elements.urlInput?.addEventListener("keypress", (e) => {
+  elements.urlInput?.addEventListener("keydown", (e) => {
     if (e.key !== "Enter") return;
     if (currentMode() === "basic") {
       handleQuickDownload();
@@ -90,6 +96,8 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     await bridge.onDownloadProgress((progress) => updateDownloadProgress(progress));
     await bridge.onDownloadFinished((finished) => handleDownloadFinished(finished));
+    await bridge.onConversionProgress((progress) => updateConversionProgress(progress));
+    await bridge.onConversionFinished((finished) => handleConversionFinished(finished));
     await bridge.onDebugCommand((command) => showDebugCommand(command.id, command.command));
     await bridge.onDebugLine((line) => appendDebugLine(line));
 

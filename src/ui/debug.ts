@@ -15,6 +15,11 @@ const DEBUG_LOG_MAX_LINES = 500;
 const pendingCommands = new Map<string, string>();
 const pendingLines = new Map<string, { stream: "stdout" | "stderr"; text: string }[]>();
 
+/** Classes de uma linha do log; stderr em vermelho. */
+function debugLineClass(stream: "stdout" | "stderr"): string {
+  return "break-all whitespace-pre-wrap" + (stream === "stderr" ? " text-red/85" : "");
+}
+
 export function toggleNerdMode() {
   state.nerdMode = !state.nerdMode;
   elements.nerdModeBtn?.setAttribute("aria-pressed", String(state.nerdMode));
@@ -27,7 +32,7 @@ function replayDebugLog() {
   elements.debugLog.innerHTML = "";
   for (const line of state.debugLines) {
     const el = document.createElement("div");
-    el.className = "debug-log-line" + (line.stream === "stderr" ? " is-stderr" : "");
+    el.className = debugLineClass(line.stream);
     el.textContent = line.text;
     elements.debugLog.appendChild(el);
   }
@@ -76,7 +81,7 @@ export function appendDebugLine(line: DebugLine) {
   if (!state.nerdMode || !elements.debugLog) return;
 
   const el = document.createElement("div");
-  el.className = "debug-log-line" + (line.stream === "stderr" ? " is-stderr" : "");
+  el.className = debugLineClass(line.stream);
   el.textContent = line.text;
   elements.debugLog.appendChild(el);
   elements.debugLog.scrollTop = elements.debugLog.scrollHeight;

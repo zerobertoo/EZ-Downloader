@@ -14,32 +14,34 @@
   <body>
     <div class="noise-overlay" aria-hidden="true"></div>
 
-    <div id="app" data-phase="idle" data-hero="full" data-mode="basic">
+    <!-- `group/app` + data-* no #app: fase, hero e modo viram variantes (group-data-[mode=basic]/app:…) -->
+    <div id="app" data-phase="idle" data-hero="full" data-mode="basic" class="group/app app-shell flex h-screen flex-col">
 
       <!-- ── Titlebar ── -->
-      <header class="app-header">
-        <div class="header-brand">
-          <div class="brand-icon" aria-hidden="true">
+      <header class="relative z-100 flex h-11 shrink-0 items-center justify-between border-b border-line bg-bg/80 px-5 backdrop-blur-[18px] backdrop-saturate-[1.6] [-webkit-app-region:drag]">
+        <div class="flex min-w-0 items-center gap-[9px] [-webkit-app-region:no-drag]">
+          <div class="flex size-7 shrink-0 items-center justify-center rounded-lg border border-accent/20 bg-accent-dim text-accent" aria-hidden="true">
             <svg width="16" height="16" viewBox="0 0 18 18" fill="none">
               <path d="M9 2v9.5M9 11.5l-3.5-3.5M9 11.5l3.5-3.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
               <path d="M2 15h14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
             </svg>
           </div>
-          <span class="brand-name">EZ<span class="brand-accent">Downloader</span></span>
+          <span class="min-w-0 truncate text-sm font-bold tracking-[-0.03em] text-fg">EZ<span class="text-accent">Downloader</span></span>
         </div>
-        <div class="header-actions">
-          <span id="version" class="version-chip">v...</span>
-          <button id="nerdModeBtn" class="mode-pill" aria-label="Modo Nerd" aria-pressed="false" title="Modo Nerd: mostra o comando e o log ao vivo">
+        <div class="flex shrink-0 items-center gap-2 [-webkit-app-region:no-drag]">
+          <!-- janela estreita: a versão é decorativa, some antes de cortar os controles reais -->
+          <span id="version" class="rounded-full border border-line bg-surface-2 px-[9px] py-0.5 font-mono text-[0.6875rem] tracking-[0.02em] text-fg-3 max-[420px]:hidden">v...</span>
+          <button id="nerdModeBtn" class="pill" aria-label="Modo Nerd" aria-pressed="false" title="Modo Nerd: mostra o comando e o log ao vivo">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true">
               <polyline points="8 6 2 12 8 18" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
               <polyline points="16 6 22 12 16 18" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
             </svg>
             Nerd
           </button>
-          <button id="modeToggleBtn" class="mode-pill" aria-label="Alternar Básico/Avançado">
+          <button id="modeToggleBtn" class="pill" aria-label="Alternar Básico/Avançado">
             <span id="modeToggleLabel">Básico</span>
           </button>
-          <button id="themeToggleBtn" class="theme-btn" aria-label="Escolher tema" aria-expanded="false">
+          <button id="themeToggleBtn" class="flex size-7 items-center justify-center rounded-lg border border-line bg-surface-2 text-fg-2 transition-colors duration-150 hover:border-line-2 hover:bg-surface-3 hover:text-fg pointer-coarse:size-11" aria-label="Escolher tema" aria-expanded="false">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
               <circle cx="13.5" cy="6.5" r="2.5" fill="currentColor"/>
               <circle cx="19" cy="12" r="2.5" fill="currentColor"/>
@@ -48,61 +50,64 @@
               <path d="M12 2a10 10 0 1 0 8.66 15c.3-.5-.1-1.1-.68-1a5 5 0 0 1-6-6.32C14.3 8.9 13.9 8.2 13.3 8.1A5 5 0 0 1 12 2z" stroke="currentColor" stroke-width="1.4"/>
             </svg>
           </button>
-          <div id="themePopover" class="theme-popover hidden" role="menu"></div>
+          <div id="themePopover" class="absolute top-[38px] right-3 z-200 flex animate-appear-sm gap-1.5 rounded-[0.875rem] border border-line-2 bg-surface-2 p-2 shadow-popover hidden" role="menu"></div>
         </div>
       </header>
 
-      <!-- ── Scrollable body ── -->
-      <main class="app-body">
-        <div class="content-wrap">
+      <!-- ── Scrollable body ──
+           items-start + filhos shrink-0: sem isso o wrapper estica até a altura da janela
+           e os cards encolhem/sobrepõem em vez de rolar. -->
+      <main class="flex min-h-0 flex-1 items-start justify-center overflow-x-hidden overflow-y-auto">
+        <div class="flex w-full max-w-[640px] flex-col gap-3 px-[18px] pt-[22px] pb-9 transition-[padding] duration-200 ease-app group-data-[hero=collapsed]/app:pt-3.5 *:shrink-0">
 
           <!-- ════════════════ URL CARD — sempre visível ════════════════ -->
-          <div class="input-card">
-            <div class="input-card-shimmer" aria-hidden="true"></div>
+          <div class="card relative animate-appear-lg overflow-hidden px-7 pt-8 pb-[26px] transition-[padding] duration-200 ease-app before:absolute before:inset-x-[12%] before:top-0 before:h-px before:bg-linear-to-r before:from-transparent before:via-accent/55 before:to-transparent before:content-[''] group-data-[hero=collapsed]/app:px-[18px] group-data-[hero=collapsed]/app:py-3.5">
+            <div class="pointer-events-none absolute -top-[50px] left-1/2 h-[110px] w-[260px] -translate-x-1/2 bg-[radial-gradient(ellipse,color-mix(in_srgb,var(--accent)_11%,transparent)_0%,transparent_72%)] transition-opacity duration-200 group-data-[hero=collapsed]/app:opacity-0" aria-hidden="true"></div>
 
-            <div class="input-hero">
-              <div class="input-hero-inner">
-                <div class="hero-eyebrow">
-                  <span class="eyebrow-dot" aria-hidden="true"></span>
-                  <span class="eyebrow-text">YouTube · TikTok · Instagram · Twitter · Twitch · +1000 sites</span>
+            <!-- hero recolhe via grid-template-rows: sem altura em px chutada -->
+            <div class="mb-[26px] grid grid-rows-[1fr] transition-[grid-template-rows,opacity,margin-bottom] duration-300 ease-app group-data-[hero=collapsed]/app:mb-0 group-data-[hero=collapsed]/app:grid-rows-[0fr] group-data-[hero=collapsed]/app:opacity-0">
+              <div class="min-h-0 overflow-hidden">
+                <div class="mb-3.5 flex items-center gap-2">
+                  <span class="inline-block size-1.5 shrink-0 animate-breathe rounded-full bg-accent shadow-[0_0_8px_var(--accent-glow)] motion-reduce:animate-none" aria-hidden="true"></span>
+                  <span class="text-[0.6875rem] tracking-[0.01em] text-fg-3">YouTube · TikTok · Instagram · Twitter · Twitch · +1000 sites</span>
                 </div>
-                <h1 class="hero-title">O que você quer<br><span class="hero-accent">baixar hoje?</span></h1>
+                <h1 class="text-2xl leading-[1.18] font-extrabold tracking-[-0.045em] text-fg">O que você quer<br><span class="text-accent">baixar hoje?</span></h1>
               </div>
             </div>
 
-            <div class="url-row">
-              <div class="url-field-wrap">
-                <svg class="url-prefix-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <div class="flex items-stretch gap-2">
+              <div class="group/url relative flex min-w-0 flex-1 items-center">
+                <svg class="pointer-events-none absolute left-[13px] shrink-0 text-fg-3 transition-colors duration-200 group-focus-within/url:text-accent" width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                   <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
                   <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
                 </svg>
                 <input
                   type="text"
                   id="urlInput"
-                  class="url-input"
+                  class="h-11 w-full min-w-0 rounded-xl border border-line bg-surface-2 pr-3.5 pl-10 text-sm text-fg transition-[border-color,box-shadow,background] duration-200 ease-app outline-none select-text placeholder:text-fg-3 focus:border-line-focus focus:bg-surface-3 focus:shadow-[0_0_0_3px_var(--accent-dim),0_0_18px_color-mix(in_srgb,var(--accent)_8%,transparent)] disabled:cursor-not-allowed disabled:opacity-50"
                   placeholder="Cole a URL do vídeo aqui..."
                   autocomplete="off"
                   spellcheck="false"
                   aria-label="URL do vídeo"
                 />
               </div>
-              <button id="fetchFormatsBtn" class="fetch-btn mode-advanced-only" aria-label="Buscar formatos">
-                <svg class="fetch-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <button id="fetchFormatsBtn" class="btn-accent h-11 px-5 text-sm tracking-[-0.01em] shadow-accent-sm hover:not-disabled:shadow-accent-sm-hover group-data-[mode=basic]/app:hidden!" aria-label="Buscar formatos">
+                <svg class="group-data-[phase=fetching]/app:hidden" width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                   <circle cx="11" cy="11" r="8" stroke="currentColor" stroke-width="2.2"/>
                   <path d="m21 21-4.35-4.35" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>
                 </svg>
-                <span class="fetch-spinner" aria-hidden="true"></span>
+                <span class="size-3.5 shrink-0 animate-spin-fast rounded-full border-2 border-on-accent/35 border-t-on-accent [display:none] group-data-[phase=fetching]/app:block motion-reduce:[animation-duration:1.4s]" aria-hidden="true"></span>
                 Buscar
               </button>
             </div>
 
             <!-- ── Modo Rápido: toggle MP3/MP4 + Baixar, sem tela de metadados ── -->
-            <div id="quickControls" class="quick-controls mode-basic-only">
-              <div class="quick-format-toggle" role="radiogroup" aria-label="Formato de download">
-                <button id="quickMp4Btn" class="quick-format-option is-active" type="button" role="radio" aria-checked="true" data-format="mp4">Vídeo (MP4)</button>
-                <button id="quickMp3Btn" class="quick-format-option" type="button" role="radio" aria-checked="false" data-format="mp3">Áudio (MP3)</button>
+            <div id="quickControls" class="mt-3 flex flex-col gap-2.5 group-data-[mode=advanced]/app:hidden!">
+              <div class="flex gap-1.5 rounded-xl border border-line bg-surface-2 p-1" role="radiogroup" aria-label="Formato de download">
+                <button id="quickMp4Btn" class="h-9 flex-1 rounded-lg text-[0.8125rem] font-semibold text-fg-2 transition-colors duration-150 not-aria-checked:hover:text-fg aria-checked:bg-accent aria-checked:text-on-accent aria-checked:shadow-[0_2px_10px_color-mix(in_srgb,var(--accent)_38%,transparent)]" type="button" role="radio" aria-checked="true" data-format="mp4">Vídeo (MP4)</button>
+                <button id="quickMp3Btn" class="h-9 flex-1 rounded-lg text-[0.8125rem] font-semibold text-fg-2 transition-colors duration-150 not-aria-checked:hover:text-fg aria-checked:bg-accent aria-checked:text-on-accent aria-checked:shadow-[0_2px_10px_color-mix(in_srgb,var(--accent)_38%,transparent)]" type="button" role="radio" aria-checked="false" data-format="mp3">Áudio (MP3)</button>
               </div>
-              <button id="quickDownloadBtn" class="download-btn quick-download-btn">
+              <button id="quickDownloadBtn" class="btn-accent h-[3.125rem] w-full gap-2.5 rounded-[1.125rem] text-[0.9375rem] font-extrabold tracking-[-0.025em]">
                 <svg width="17" height="17" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                   <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
                   <polyline points="7 10 12 15 17 10" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
@@ -117,9 +122,9 @@
           </div>
 
           <!-- ── Modo Nerd: comando montado + log ao vivo ── -->
-          <div id="debugPanel" class="debug-panel hidden">
-            <div class="debug-panel-header">
-              <span class="debug-panel-title">
+          <div id="debugPanel" class="hidden animate-appear rounded-2xl border border-line bg-surface px-4 py-3.5">
+            <div class="mb-2">
+              <span class="inline-flex items-center gap-[5px] text-[0.6875rem] font-bold tracking-[0.08em] text-fg-3 uppercase">
                 <svg width="11" height="11" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                   <polyline points="8 6 2 12 8 18" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
                   <polyline points="16 6 22 12 16 18" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
@@ -127,87 +132,87 @@
                 Bastidores
               </span>
             </div>
-            <code id="debugCommand" class="debug-command"></code>
-            <div id="debugLog" class="debug-log" aria-live="off"></div>
+            <code id="debugCommand" class="mb-2 block overflow-x-auto rounded-lg border border-line bg-surface-2 px-2.5 py-2 font-mono text-xs whitespace-nowrap text-accent-bright select-text empty:before:text-fg-3 empty:before:italic empty:before:content-[attr(data-empty)]" data-empty="O comando aparece ao iniciar um download"></code>
+            <div id="debugLog" class="max-h-40 overflow-y-auto rounded-lg border border-line bg-surface-2 px-2.5 py-2 font-mono text-[0.6875rem] leading-[1.6] text-fg-2 select-text empty:before:text-fg-3 empty:before:italic empty:before:content-[attr(data-empty)]" aria-live="off" data-empty="Aguardando saída do yt-dlp..."></div>
           </div>
 
           <!-- ════════════════ LOADING ════════════════ -->
-          <div id="loadingRegion" class="loading-region hidden" aria-live="polite">
-            <div class="loading-card">
-              <div class="loader-ring" aria-hidden="true">
-                <div class="loader-arc"></div>
+          <div id="loadingRegion" class="hidden animate-appear" aria-live="polite">
+            <div class="card flex items-center gap-5 px-[26px] py-[22px]">
+              <div class="flex size-11 shrink-0 items-center justify-center rounded-full bg-accent-dim" aria-hidden="true">
+                <div class="size-7 animate-spin-fast rounded-full border-[2.5px] border-accent/20 border-t-accent border-r-accent/45 motion-reduce:[animation-duration:1.4s]"></div>
               </div>
-              <div class="loading-text">
-                <p class="loading-headline">Buscando informações...</p>
-                <p class="loading-sub">Obtendo formatos disponíveis</p>
+              <div>
+                <p class="mb-[3px] text-base font-semibold tracking-[-0.02em] text-fg">Buscando informações...</p>
+                <p class="text-xs text-fg-3">Obtendo formatos disponíveis</p>
               </div>
             </div>
           </div>
 
           <!-- ════════════════ VIDEO CARD ════════════════ -->
-          <div id="videoCard" class="video-card hidden">
-            <div class="thumb-wrap">
-              <img id="videoThumbnail" class="video-thumb" alt="Thumbnail do vídeo" />
-              <div class="thumb-scrim" aria-hidden="true"></div>
+          <div id="videoCard" class="card hidden overflow-hidden">
+            <div class="relative aspect-video overflow-hidden bg-surface-2">
+              <img id="videoThumbnail" class="block size-full object-cover" alt="Thumbnail do vídeo" />
+              <div class="absolute inset-0 bg-[linear-gradient(170deg,transparent_45%,color-mix(in_srgb,var(--bg)_88%,transparent)_100%)]" aria-hidden="true"></div>
             </div>
-            <div class="video-meta-panel">
-              <h2 id="videoTitle" class="video-title-text"></h2>
-              <p id="videoUploader" class="video-uploader-text"></p>
+            <div class="px-[18px] pt-3.5 pb-[18px]">
+              <h2 id="videoTitle" class="mb-[5px] line-clamp-2 text-base leading-[1.4] font-semibold tracking-[-0.025em] text-fg"></h2>
+              <p id="videoUploader" class="text-xs text-fg-3"></p>
             </div>
           </div>
 
           <!-- ════════════════ CONFIG CARD ════════════════ -->
-          <div id="configCard" class="config-card hidden">
+          <!-- gap único de 18px entre grupos, divisores e botão: ritmo vertical sem margens soltas -->
+          <div id="configCard" class="card hidden flex flex-col gap-[18px] px-[22px] pt-[22px] pb-[18px]">
 
             <!-- Format selector -->
-            <div class="field-group">
+            <div class="flex flex-col gap-2">
               <label for="formatSelect" class="field-label">
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                   <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
                 </svg>
                 Formato
               </label>
-              <div class="select-shell">
-                <select id="formatSelect" class="format-select" aria-label="Selecione o formato do vídeo"></select>
-                <svg class="select-caret" width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <div class="relative">
+                <select id="formatSelect" class="h-11 w-full cursor-pointer appearance-none rounded-xl border border-line bg-surface-2 pr-[38px] pl-[13px] text-sm text-fg transition-[border-color,box-shadow,background] duration-200 ease-app outline-none select-text focus:border-line-focus focus:bg-surface-3 focus:shadow-[0_0_0_3px_var(--accent-dim)] disabled:cursor-not-allowed disabled:opacity-50 [&_optgroup]:bg-surface-2 [&_optgroup]:text-fg-3 [&_optgroup]:not-italic [&_option]:bg-surface-2 [&_option]:text-fg" aria-label="Selecione o formato do vídeo"></select>
+                <svg class="pointer-events-none absolute top-1/2 right-[11px] -translate-y-1/2 text-fg-3" width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                   <path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
                 </svg>
               </div>
-              <p id="formatInfo" class="format-meta" aria-live="polite"></p>
+              <p id="formatInfo" class="min-h-[15px] pl-px text-xs text-accent opacity-85" aria-live="polite"></p>
             </div>
 
-            <div class="field-divider" role="separator" aria-hidden="true"></div>
+            <div class="-mx-[22px] h-px bg-line" role="separator" aria-hidden="true"></div>
 
-            <!-- Opções avançadas: corte, legendas e argumentos extras ficam recolhidos —
-                 fora do caminho de quem só quer escolher o formato e baixar. -->
-            <details class="field-group advanced-options">
-              <summary class="field-label advanced-options-summary">Opções avançadas</summary>
+            <!-- Opções avançadas recolhidas: fora do caminho de quem só quer escolher o formato e baixar. -->
+            <details class="group/adv flex flex-col gap-2">
+              <summary class="field-label cursor-pointer list-none select-none after:ml-auto after:size-2 after:rotate-45 after:border-r-[1.6px] after:border-b-[1.6px] after:border-current after:transition-transform after:duration-150 after:content-[''] group-open/adv:after:-rotate-135 [&::-webkit-details-marker]:hidden">Opções avançadas</summary>
 
               <!-- Corte por tempo -->
-              <div class="field-subgroup">
-                <label class="field-label">Corte (opcional)</label>
-                <div class="section-row">
-                  <input type="text" id="sectionStart" class="path-input section-input" placeholder="00:00:00" aria-label="Início do corte" />
-                  <span class="section-sep">até</span>
-                  <input type="text" id="sectionEnd" class="path-input section-input" placeholder="00:01:30" aria-label="Fim do corte" />
+              <div class="flex flex-col gap-2 pt-4">
+                <label for="sectionStart" class="field-label">Corte (opcional)</label>
+                <div class="flex items-center gap-2">
+                  <input type="text" id="sectionStart" class="field-input text-center" placeholder="00:00:00" aria-label="Início do corte" />
+                  <span class="shrink-0 text-xs text-fg-3">até</span>
+                  <input type="text" id="sectionEnd" class="field-input text-center" placeholder="00:01:30" aria-label="Fim do corte" />
                 </div>
-                <p id="sectionError" class="field-error" role="alert"></p>
+                <p id="sectionError" class="field-error mt-0.5" role="alert"></p>
               </div>
 
               <!-- Legendas -->
-              <div class="field-subgroup">
-                <label class="field-label checkbox-label">
-                  <input type="checkbox" id="subLangsCheckbox" class="field-checkbox" />
+              <div class="flex flex-col gap-2 pt-4">
+                <label class="field-label cursor-pointer text-[0.8125rem] tracking-normal text-fg normal-case">
+                  <input type="checkbox" id="subLangsCheckbox" class="size-4 cursor-pointer accent-accent" />
                   Baixar legendas
                 </label>
-                <input type="text" id="subLangsInput" class="path-input hidden" placeholder="Idiomas (ex: en,pt)" aria-label="Idiomas das legendas" />
+                <input type="text" id="subLangsInput" class="field-input hidden" placeholder="Idiomas (ex: en,pt)" aria-label="Idiomas das legendas" />
               </div>
 
               <!-- Cookies do navegador: sessão já logada resolve vídeos com idade
                    restrita ou 403 de anti-bot sem precisar exportar cookies manualmente. -->
-              <div class="field-subgroup">
+              <div class="flex flex-col gap-2 pt-4">
                 <label for="cookiesBrowserSelect" class="field-label">Usar cookies do navegador</label>
-                <select id="cookiesBrowserSelect" class="path-input" aria-label="Navegador para importar cookies">
+                <select id="cookiesBrowserSelect" class="field-input" aria-label="Navegador para importar cookies">
                   <option value="">Nenhum</option>
                   <option value="chrome">Chrome</option>
                   <option value="firefox">Firefox</option>
@@ -222,46 +227,46 @@
               </div>
 
               <!-- Limite de velocidade -->
-              <div class="field-subgroup">
+              <div class="flex flex-col gap-2 pt-4">
                 <label for="limitRateInput" class="field-label">Limite de velocidade (opcional)</label>
-                <input type="text" id="limitRateInput" class="path-input" placeholder="ex: 2M, 500K" aria-label="Limite de velocidade de download" />
-                <p id="limitRateError" class="field-error" role="alert"></p>
+                <input type="text" id="limitRateInput" class="field-input" placeholder="ex: 2M, 500K" aria-label="Limite de velocidade de download" />
+                <p id="limitRateError" class="field-error mt-0.5" role="alert"></p>
               </div>
 
               <!-- Argumentos extras (allowlist validada no backend) -->
-              <div class="field-subgroup">
+              <div class="flex flex-col gap-2 pt-4">
                 <label for="extraArgsInput" class="field-label">Argumentos extras (yt-dlp)</label>
-                <input type="text" id="extraArgsInput" class="path-input" placeholder="ex: --embed-thumbnail --no-playlist" aria-label="Argumentos extras" />
+                <input type="text" id="extraArgsInput" class="field-input" placeholder="ex: --embed-thumbnail --no-playlist" aria-label="Argumentos extras" />
                 <p class="field-note">Flags aceitas: --write-subs, --write-auto-subs, --embed-thumbnail, --embed-metadata, --no-playlist, --yes-playlist, --cookies-from-browser &lt;navegador&gt;. Outras são rejeitadas ao iniciar o download.</p>
               </div>
             </details>
 
-            <div class="field-divider" role="separator" aria-hidden="true"></div>
+            <div class="-mx-[22px] h-px bg-line" role="separator" aria-hidden="true"></div>
 
             <!-- Destination path -->
-            <div class="field-group">
+            <div class="flex flex-col gap-2">
               <label for="downloadPath" class="field-label">
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                   <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
                 </svg>
                 Destino
               </label>
-              <div class="path-row">
+              <div class="flex gap-2">
                 <input
                   type="text"
                   id="downloadPath"
-                  class="path-input"
+                  class="field-input"
                   placeholder="Selecionar pasta..."
                   readonly
                   aria-label="Caminho de download"
                 />
-                <button id="selectPathBtn" class="browse-btn">Procurar</button>
+                <button id="selectPathBtn" class="btn-secondary h-11 shrink-0 rounded-xl px-[15px] text-xs">Procurar</button>
               </div>
-              <p id="pathError" class="field-error" role="alert"></p>
+              <p id="pathError" class="field-error mt-0.5" role="alert"></p>
             </div>
 
             <!-- Download trigger -->
-            <button id="downloadBtn" class="download-btn hidden">
+            <button id="downloadBtn" class="btn-accent hidden h-[3.125rem] w-full gap-2.5 rounded-[1.125rem] text-[0.9375rem] font-extrabold tracking-[-0.025em]">
               <svg width="17" height="17" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                 <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
                 <polyline points="7 10 12 15 17 10" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
@@ -272,24 +277,24 @@
           </div>
 
           <!-- ════════════════ DOWNLOADS — fila concorrente da sessão ════════════════ -->
-          <div id="downloadsSection" class="downloads-section hidden">
-            <h2 class="section-heading">Downloads</h2>
-            <div id="downloadsList" class="downloads-list"></div>
+          <div id="downloadsSection" class="hidden flex flex-col gap-2.5">
+            <h2 class="text-[0.6875rem] font-bold tracking-[0.08em] text-fg-3 uppercase">Downloads</h2>
+            <div id="downloadsList" class="flex flex-col gap-3"></div>
           </div>
 
           <!-- ════════════════ HISTÓRICO — persistente entre sessões ════════════════ -->
-          <div id="historySection" class="history-section">
-            <button id="historyToggleBtn" class="history-toggle" aria-expanded="false">
-              <span class="section-heading" role="heading" aria-level="2">Histórico</span>
-              <svg class="history-toggle-caret" width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <div id="historySection" class="overflow-hidden rounded-[1.25rem] border border-line bg-surface">
+            <button id="historyToggleBtn" class="group/hist flex h-[46px] w-full items-center justify-between bg-transparent px-[18px] text-fg-2 focus-visible:outline-offset-[-2px]" aria-expanded="false">
+              <span class="text-[0.6875rem] font-bold tracking-[0.08em] text-fg-3 uppercase" role="heading" aria-level="2">Histórico</span>
+              <svg class="text-fg-3 transition-transform duration-150 group-aria-expanded/hist:rotate-180" width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                 <path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
               </svg>
             </button>
-            <div id="historyBody" class="history-body hidden">
-              <input type="text" id="historySearchInput" class="path-input history-search" placeholder="Buscar por título ou URL" aria-label="Buscar no histórico" />
-              <div id="historyList" class="history-list"></div>
-              <p id="historyEmpty" class="history-empty hidden">Nenhum download ainda</p>
-              <button id="clearHistoryBtn" class="history-clear-btn">Limpar histórico</button>
+            <div id="historyBody" class="hidden flex flex-col gap-2 px-[18px] pb-4">
+              <input type="text" id="historySearchInput" class="field-input" placeholder="Buscar por título ou URL" aria-label="Buscar no histórico" />
+              <div id="historyList" class="flex flex-col gap-2"></div>
+              <p id="historyEmpty" class="hidden py-3 text-center text-xs text-fg-3">Nenhum download ainda</p>
+              <button id="clearHistoryBtn" class="btn-ghost h-[30px] self-start px-3 text-[0.7rem] font-semibold pointer-coarse:min-h-11">Limpar histórico</button>
             </div>
           </div>
 

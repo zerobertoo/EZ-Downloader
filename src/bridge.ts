@@ -38,6 +38,31 @@ export interface DownloadProgress {
 export interface DownloadFinished {
   id: string;
   status: "done" | "failed" | "cancelled";
+  /** Pasta de destino. */
+  path: string | null;
+  /** Arquivo final baixado — base da conversão de codec. */
+  filePath: string | null;
+  error: string | null;
+}
+
+/** Análise de um arquivo baixado: codecs e se vale converter pra H.264/AAC. */
+export interface MediaReport {
+  videoCodec: string | null;
+  audioCodec: string | null;
+  needsConversion: boolean;
+  /** Encoder que seria usado, ex: "GPU NVIDIA (NVENC)" ou "CPU (x264)". */
+  encoder: string;
+  gpu: boolean;
+}
+
+export interface ConversionProgress {
+  id: string;
+  percent: number;
+}
+
+export interface ConversionFinished {
+  id: string;
+  status: "done" | "failed" | "cancelled";
   path: string | null;
   error: string | null;
 }
@@ -126,6 +151,19 @@ export const bridge = {
     ),
 
   clearHistory: (): Promise<void> => invoke("clear_history"),
+
+  analyzeMedia: (path: string): Promise<MediaReport> => invoke("analyze_media", { path }),
+
+  /** `id` é o do download de origem; o fim chega via "conversion-finished". */
+  startConversion: (id: string, path: string): Promise<void> => invoke("start_conversion", { id, path }),
+
+  cancelConversion: (id: string): Promise<void> => invoke("cancel_conversion", { id }),
+
+  onConversionProgress: (callback: (progress: ConversionProgress) => void): Promise<UnlistenFn> =>
+    listen<ConversionProgress>("conversion-progress", (event) => callback(event.payload)),
+
+  onConversionFinished: (callback: (finished: ConversionFinished) => void): Promise<UnlistenFn> =>
+    listen<ConversionFinished>("conversion-finished", (event) => callback(event.payload)),
 
   onDownloadProgress: (callback: (progress: DownloadProgress) => void): Promise<UnlistenFn> =>
     listen<DownloadProgress>("download-progress", (event) => callback(event.payload)),

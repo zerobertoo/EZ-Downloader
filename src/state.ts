@@ -1,4 +1,4 @@
-import type { FormatOption, StartDownloadOptions } from "./bridge";
+import type { FormatOption, MediaReport, StartDownloadOptions } from "./bridge";
 
 export const UI_STRINGS = {
   errorNoUrl: "Por favor, insira uma URL",
@@ -33,7 +33,21 @@ export const UI_STRINGS = {
   downloadRemove: "Remover",
   downloadRetry: "Tentar novamente",
   downloadOpenFolder: "Abrir pasta",
+  conversionTitle: "Compatibilidade com editores",
+  conversionConvert: "Converter para H.264",
+  conversionRunning: "Convertendo para H.264...",
+  conversionDone: "Convertido para H.264",
+  conversionFailed: "Não foi possível converter",
+  conversionCancel: "Cancelar",
+  conversionRetry: "Tentar novamente",
 };
+
+/** Conversão pós-download para H.264/AAC (MP4), oferecida só quando o codec baixado é problemático. */
+export type ConversionState =
+  | { phase: "offer"; report: MediaReport }
+  | { phase: "running"; report: MediaReport; percent: number }
+  | { phase: "done"; outputPath: string }
+  | { phase: "failed"; report: MediaReport; error: string };
 
 export interface VideoMetadata {
   title: string | null;
@@ -64,7 +78,11 @@ export interface DownloadItem {
   speed: string | null;
   eta: string | null;
   error: string | null;
+  /** Pasta de destino. */
   resultPath: string | null;
+  /** Arquivo final baixado (usado na conversão). */
+  filePath: string | null;
+  conversion: ConversionState | null;
 }
 
 export const state = {

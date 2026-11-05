@@ -116,13 +116,21 @@ function renderHistory(entries: HistoryEntry[]) {
   }
 }
 
+const HISTORY_BTN = "btn-secondary h-7 shrink-0 px-3 text-[0.7rem] pointer-coarse:min-h-11";
+
+const HISTORY_ICON_CLASS: Record<HistoryEntry["status"], string> = {
+  done: "bg-green-dim text-green",
+  failed: "bg-red-dim text-red",
+  cancelled: "bg-surface-3 text-fg-3",
+};
+
 function buildRow(entry: HistoryEntry): HTMLElement {
   const row = document.createElement("div");
-  row.className = `history-row is-${entry.status}`;
+  row.className = "flex items-center gap-3 rounded-xl border border-line bg-surface-2 px-3 py-2.5";
   if (entry.outputPath) row.dataset.historyPath = entry.outputPath;
 
   const icon = document.createElement("span");
-  icon.className = "history-row-icon";
+  icon.className = `flex size-[22px] shrink-0 items-center justify-center rounded-full ${HISTORY_ICON_CLASS[entry.status]}`;
   icon.setAttribute("aria-hidden", "true");
   icon.innerHTML =
     entry.status === "done"
@@ -133,20 +141,20 @@ function buildRow(entry: HistoryEntry): HTMLElement {
   row.appendChild(icon);
 
   const body = document.createElement("div");
-  body.className = "history-row-body";
+  body.className = "min-w-0 flex-1";
   const title = document.createElement("p");
-  title.className = "history-row-title";
+  title.className = "truncate text-[0.8125rem] font-semibold text-fg";
   title.textContent = entry.title || entry.url;
   body.appendChild(title);
   const meta = document.createElement("p");
-  meta.className = "history-row-meta";
+  meta.className = "font-mono text-[0.6875rem] text-fg-3";
   const date = new Date(entry.finishedAt).toLocaleString("pt-BR");
   meta.textContent = `${STATUS_LABEL[entry.status]} • ${entry.format} • ${date}`;
   body.appendChild(meta);
 
   if (entry.status === "failed" && entry.error) {
     const errorText = document.createElement("p");
-    errorText.className = "history-row-error";
+    errorText.className = "mt-0.5 text-[0.6875rem] text-red";
     errorText.textContent = friendlyErrorMessage(entry.error);
     body.appendChild(errorText);
   }
@@ -155,14 +163,14 @@ function buildRow(entry: HistoryEntry): HTMLElement {
 
   if (entry.status === "done") {
     const openBtn = document.createElement("button");
-    openBtn.className = "history-row-btn js-open-folder";
+    openBtn.className = `${HISTORY_BTN} js-open-folder`;
     openBtn.textContent = UI_STRINGS.downloadOpenFolder;
     row.appendChild(openBtn);
   }
 
   if (entry.status === "failed" || entry.status === "cancelled") {
     const retryBtn = document.createElement("button");
-    retryBtn.className = "history-row-btn";
+    retryBtn.className = HISTORY_BTN;
     retryBtn.textContent = UI_STRINGS.downloadRetry;
     retryBtn.addEventListener("click", () => void handleHistoryRetry(entry, retryBtn));
     row.appendChild(retryBtn);

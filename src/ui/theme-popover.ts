@@ -13,7 +13,11 @@ function renderThemePopover() {
   THEMES.forEach((theme) => {
     const swatch = document.createElement("button");
     swatch.type = "button";
-    swatch.className = "theme-swatch" + (theme.id === active ? " is-active" : "");
+    swatch.className =
+      "size-[30px] rounded-full border-2 p-0 transition-transform duration-150 hover:scale-110 pointer-coarse:size-11 " +
+      (theme.id === active
+        ? "border-fg shadow-[0_0_0_2px_var(--surface-2),0_0_10px_rgba(0,0,0,0.4)]"
+        : "border-transparent");
     swatch.style.background = `linear-gradient(135deg, ${theme.accent}, ${theme.accentBright})`;
     swatch.setAttribute("role", "menuitemradio");
     swatch.setAttribute("aria-checked", String(theme.id === active));
