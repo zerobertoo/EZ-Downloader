@@ -49,7 +49,9 @@ impl Encoder {
         match self {
             Encoder::Nvenc => &["-c:v", "h264_nvenc", "-rc", "vbr", "-cq", "21", "-b:v", "0"],
             Encoder::Qsv => &["-c:v", "h264_qsv", "-global_quality", "21"],
-            Encoder::Amf => &["-c:v", "h264_amf", "-rc", "cqp", "-qp_i", "21", "-qp_p", "21"],
+            Encoder::Amf => &[
+                "-c:v", "h264_amf", "-rc", "cqp", "-qp_i", "21", "-qp_p", "21",
+            ],
             Encoder::VideoToolbox => &["-c:v", "h264_videotoolbox", "-q:v", "65"],
             Encoder::X264 => &["-c:v", "libx264", "-preset", "medium", "-crf", "18"],
         }
@@ -129,9 +131,7 @@ pub fn parse_media_info(stderr: &str) -> MediaInfo {
         .captures_iter(stderr)
         .map(|caps| caps[1].to_lowercase())
         .find(|codec| !COVER_ART_CODECS.contains(&codec.as_str()));
-    let audio_codec = audio_re
-        .captures(stderr)
-        .map(|caps| caps[1].to_lowercase());
+    let audio_codec = audio_re.captures(stderr).map(|caps| caps[1].to_lowercase());
     let duration_secs = duration_re.captures(stderr).and_then(|caps| {
         let hours: f64 = caps[1].parse().ok()?;
         let minutes: f64 = caps[2].parse().ok()?;
@@ -458,9 +458,7 @@ impl ConversionManager {
     }
 }
 
-fn wait_for(
-    join: JoinHandle<Result<ProcessOutput, String>>,
-) -> Result<ProcessOutput, String> {
+fn wait_for(join: JoinHandle<Result<ProcessOutput, String>>) -> Result<ProcessOutput, String> {
     join.join()
         .map_err(|_| "Erro interno ao aguardar a conversão".to_string())
         .and_then(|r| r)
