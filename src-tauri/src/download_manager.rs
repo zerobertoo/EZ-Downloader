@@ -4,7 +4,7 @@ use crate::process_runner::{spawn_process, ProcessHandle, ProcessOutput};
 use regex::Regex;
 use serde::Serialize;
 use std::collections::{HashMap, HashSet};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 use tauri::{AppHandle, Emitter};
@@ -50,8 +50,25 @@ pub struct DebugLine {
 pub struct DownloadFinished {
     pub id: String,
     pub status: &'static str, // "done" | "failed" | "cancelled"
+    /// Pasta de destino (o que "Abrir pasta" abre).
     pub path: Option<String>,
+    /// Arquivo final baixado (na playlist, o último) — base da conversão de codec.
+    #[serde(rename = "filePath")]
+    pub file_path: Option<String>,
     pub error: Option<String>,
+}
+
+/// Lê o caminho do arquivo final gravado pelo yt-dlp em `--print-to-file`
+/// (um por linha; numa playlist vale o último). Lossy: o nome pode ter bytes
+/// fora de UTF-8 em plataformas que não forçam o encoding.
+fn read_final_file_path(path_file: &Path) -> Option<String> {
+    let bytes = std::fs::read(path_file).ok()?;
+    String::from_utf8_lossy(&bytes)
+        .lines()
+        .rev()
+        .map(str::trim)
+        .find(|line| !line.is_empty())
+        .map(str::to_string)
 }
 
 /// Opções do Modo Avançado — todas opcionais, ausentes no Modo Rápido.
@@ -340,6 +357,10 @@ impl DownloadManager {
             .unwrap_or_else(|| self.default_download_path.clone());
         std::fs::create_dir_all(&download_dir).map_err(|e| e.to_string())?;
 
+        let id = Uuid::new_v4().to_string();
+        // O yt-dlp grava aqui o caminho do arquivo final (após mover/mesclar),
+        // sem mexer no stdout que alimenta o progresso.
+        let path_file = std::env::temp_dir().join(format!("ez-downloader-{id}.path"));
         let output_template = download_dir.join("%(title)s.%(ext)s");
         let mut args = match format {
             "quick-mp3" => quick_download_args("mp3"),
@@ -384,6 +405,9 @@ impl DownloadManager {
             args.push("--ffmpeg-location".to_string());
             args.push(ffmpeg.clone());
         }
+        args.push("--print-to-file".to_string());
+        args.push("after_move:filepath".to_string());
+        args.push(path_file.to_string_lossy().to_string());
         args.push("-o".to_string());
         args.push(output_template.to_string_lossy().to_string());
         args.push("--progress".to_string());
@@ -394,7 +418,6 @@ impl DownloadManager {
         args.push(url.to_string());
 
         let ytdlp_bin = self.current_ytdlp_bin();
-        let id = Uuid::new_v4().to_string();
         log::info!(
             "Iniciando download {id}: url={url} formato={format} destino={}",
             download_dir.display()
@@ -465,6 +488,12 @@ impl DownloadManager {
             }
 
             manager.active.lock().unwrap().remove(&finish_id);
+            let file_path = if status == "done" {
+                read_final_file_path(&path_file)
+            } else {
+                None
+            };
+            let _ = std::fs::remove_file(&path_file);
             match status {
                 "done" => log::info!("Download {finish_id} concluído: {output_dir}"),
                 "cancelled" => log::info!("Download {finish_id} cancelado pelo usuário"),
@@ -497,6 +526,7 @@ impl DownloadManager {
                     id: finish_id.clone(),
                     status,
                     path,
+                    file_path,
                     error: error.clone(),
                 },
             );

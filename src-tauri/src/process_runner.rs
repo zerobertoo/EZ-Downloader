@@ -1,5 +1,6 @@
 use std::io::{BufRead, BufReader};
 use std::process::{Child, Command, Stdio};
+use std::sync::mpsc::{self, RecvTimeoutError};
 use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle};
 use std::time::Duration;
@@ -61,11 +62,15 @@ where
     };
 
     let timed_out = Arc::new(Mutex::new(false));
+    // Acorda a thread do timeout quando o processo termina (um sleep fixo travava até o fim do prazo).
+    let (done_tx, done_rx) = mpsc::channel::<()>();
     let timeout_thread = timeout.map(|dur| {
         let child = Arc::clone(&child);
         let timed_out = Arc::clone(&timed_out);
         thread::spawn(move || {
-            thread::sleep(dur);
+            if done_rx.recv_timeout(dur) != Err(RecvTimeoutError::Timeout) {
+                return;
+            }
             if let Ok(mut guard) = child.lock() {
                 if matches!(guard.try_wait(), Ok(None)) {
                     *timed_out.lock().unwrap() = true;
@@ -96,6 +101,7 @@ where
         let stderr_buf = stderr_thread.join().unwrap_or_default();
         let status = child.lock().unwrap().wait().map_err(|e| e.to_string())?;
 
+        drop(done_tx);
         if let Some(t) = timeout_thread {
             let _ = t.join();
         }

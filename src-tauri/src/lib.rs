@@ -1,4 +1,5 @@
 mod commands;
+mod convert;
 mod dependency_checker;
 mod download_manager;
 mod format_parser;
@@ -7,6 +8,7 @@ mod paths;
 mod process_runner;
 mod ytdlp_updater;
 
+use convert::ConversionManager;
 use dependency_checker::check_dependencies;
 use download_manager::DownloadManager;
 use tauri::menu::{Menu, MenuItem, PredefinedMenuItem, Submenu};
@@ -247,6 +249,7 @@ pub fn run() {
                     dir.join("history.json")
                 })
                 .unwrap_or_else(|_| std::path::PathBuf::from("history.json"));
+            app.manage(ConversionManager::new(ffmpeg_bin.clone()));
             let manager = DownloadManager::new(
                 ytdlp_bin,
                 Some(ffmpeg_bin),
@@ -301,6 +304,9 @@ pub fn run() {
             commands::get_downloads_path,
             commands::open_path,
             commands::update_ytdlp,
+            commands::analyze_media,
+            commands::start_conversion,
+            commands::cancel_conversion,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

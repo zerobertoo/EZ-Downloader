@@ -1,3 +1,4 @@
+use crate::convert::{ConversionManager, MediaReport};
 use crate::download_manager::{DownloadManager, DownloadOptions, FormatsResult};
 use crate::history::HistoryEntry;
 use serde::Serialize;
@@ -130,4 +131,36 @@ pub fn open_path(app: AppHandle, path: String) -> Result<(), String> {
     app.opener()
         .open_path(path, None::<&str>)
         .map_err(|e| e.to_string())
+}
+
+/// Analisa o arquivo baixado: codecs e se vale converter pra H.264/AAC.
+#[tauri::command]
+pub async fn analyze_media(
+    converter: State<'_, ConversionManager>,
+    path: String,
+) -> Result<MediaReport, String> {
+    let converter = converter.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || converter.analyze(&path))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+/// Inicia a conversão em background (fim via evento "conversion-finished").
+/// `id` é o do download de origem.
+#[tauri::command]
+pub async fn start_conversion(
+    app: AppHandle,
+    converter: State<'_, ConversionManager>,
+    id: String,
+    path: String,
+) -> Result<(), String> {
+    let converter = converter.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || converter.start(&app, &id, &path))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+pub fn cancel_conversion(converter: State<ConversionManager>, id: String) {
+    converter.cancel(&id);
 }
