@@ -1,7 +1,8 @@
 use sha2::{Digest, Sha256};
 use std::fs;
-use std::io::Read;
 use tauri::AppHandle;
+
+const MAX_BINARY_BYTES: u64 = 200 * 1024 * 1024;
 
 const SUMS_URL: &str = "https://github.com/yt-dlp/yt-dlp/releases/latest/download/SHA2-256SUMS";
 
@@ -37,11 +38,12 @@ fn parse_sums(sums: &str, asset: &str) -> Option<String> {
 }
 
 fn expected_sha256(asset: &str) -> Result<String, String> {
-    let response = ureq::get(SUMS_URL)
+    let mut response = ureq::get(SUMS_URL)
         .call()
         .map_err(|e| format!("Erro ao baixar SHA2-256SUMS: {e}"))?;
     let sums = response
-        .into_string()
+        .body_mut()
+        .read_to_string()
         .map_err(|e| format!("Erro ao ler SHA2-256SUMS: {e}"))?;
 
     parse_sums(&sums, asset)
@@ -70,18 +72,17 @@ pub fn update(app: &AppHandle) -> Result<String, String> {
     let tmp = dest.with_extension("download");
 
     log::info!("Baixando yt-dlp de {}", download_url());
-    let response = ureq::get(&download_url())
+    let mut response = ureq::get(&download_url())
         .call()
         .map_err(|e| format!("Erro ao baixar yt-dlp: {e}"))?;
 
-    let mut reader = response.into_reader();
-    let bytes = {
-        let mut buf = Vec::new();
-        reader
-            .read_to_end(&mut buf)
-            .map_err(|e| format!("Erro ao ler resposta: {e}"))?;
-        buf
-    };
+    // o limite padrão do ureq 3 é 10 MB, menor que o binário do yt-dlp
+    let bytes = response
+        .body_mut()
+        .with_config()
+        .limit(MAX_BINARY_BYTES)
+        .read_to_vec()
+        .map_err(|e| format!("Erro ao ler resposta: {e}"))?;
     if bytes.is_empty() {
         return Err("Download do yt-dlp veio vazio".to_string());
     }
