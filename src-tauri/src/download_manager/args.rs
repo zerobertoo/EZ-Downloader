@@ -198,8 +198,8 @@ pub(super) fn is_unrecognized_remote_components_error(stderr: &str) -> bool {
 }
 
 /// O yt-dlp lê qualquer argumento iniciado por `-` como opção, então a URL
-/// precisa ser http(s) de verdade antes de chegar à linha de comando. Vale
-/// também para itens restaurados de `queue.json`, que o usuário pode ter editado.
+/// precisa ser http(s) antes de chegar à linha de comando, inclusive a de
+/// itens restaurados de `queue.json`.
 pub(super) fn validate_media_url(raw: &str) -> Result<String, String> {
     let trimmed = raw.trim();
     match url::Url::parse(trimmed) {
