@@ -31,7 +31,7 @@ export async function handleFetchFormats() {
   }
 
   if (looksLikePlaylist(url)) {
-    await openAdvancedPlaylistSelection(url);
+    await openAdvancedPlaylistSelection(url, () => void handleFetchFormats());
     return;
   }
 

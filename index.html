@@ -143,6 +143,7 @@
               <button id="selectionNoneBtn" class="btn-secondary h-8 rounded-lg px-3 text-xs pointer-coarse:min-h-11">Desmarcar todos</button>
             </div>
             <div id="selectionList" class="flex max-h-80 flex-col gap-0.5 overflow-y-auto"></div>
+            <button id="selectionSingleBtn" type="button" class="btn-secondary hidden h-11 w-full text-sm pointer-coarse:min-h-11">Só este vídeo</button>
             <div class="flex gap-2">
               <button id="selectionConfirmBtn" class="btn-accent h-11 flex-1 rounded-xl text-sm font-bold"></button>
               <button id="selectionCancelBtn" class="btn-ghost h-11 px-4 text-sm font-medium pointer-coarse:min-h-11">Cancelar</button>
@@ -369,6 +370,11 @@
           <div id="downloadsSection" class="hidden flex flex-col gap-2.5">
             <h2 class="text-[0.6875rem] font-bold tracking-[0.08em] text-fg-3 uppercase">Downloads</h2>
             <div id="downloadsList" class="flex flex-col gap-3"></div>
+          </div>
+
+          <div class="flex items-center justify-between gap-3 px-1">
+            <label for="maxConcurrentSelect" class="field-label">Downloads simultâneos</label>
+            <select id="maxConcurrentSelect" class="field-input h-9 w-20 flex-none" aria-label="Quantidade de downloads simultâneos"></select>
           </div>
 
           <!-- ════════════════ HISTÓRICO — persistente entre sessões ════════════════ -->

@@ -20,6 +20,7 @@ import { handleFetchFormats, handleFormatChange } from "./ui/formats";
 import { initHistoryUI, loadHistory } from "./ui/history";
 import { handleToggleMode, renderModeLabel, setQuickFormat } from "./ui/mode-controls";
 import { render } from "./ui/render";
+import { initConcurrencyUI } from "./ui/concurrency";
 import { initPresetsUI } from "./ui/presets";
 import { initSelectionUI } from "./ui/selection";
 import { closeThemePopover, toggleThemePopover } from "./ui/theme-popover";
@@ -105,6 +106,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     initClipboardUI(settings.clipboardMonitor);
     initPresetsUI(settings);
+    initConcurrencyUI(settings.maxConcurrent);
     await bridge.onQueueChanged((items) => syncQueue(items));
     await bridge.onDownloadProgress((progress) => updateDownloadProgress(progress));
     await bridge.onDownloadFinished((finished) => handleDownloadFinished(finished));

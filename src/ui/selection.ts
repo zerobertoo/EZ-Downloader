@@ -21,6 +21,8 @@ export interface SelectionRequest {
   buildParams: (entry: SelectionEntry) => EnqueueParams;
   /** Chamado quando ao menos um item entrou na fila; recebe os que falharam. */
   onEnqueued?: (failures: EnqueueFailure[]) => void;
+  /** Quando o link é um vídeo dentro de uma playlist: abandona a seleção e segue só com o vídeo. */
+  onSingleVideo?: () => void;
 }
 
 let active: { request: SelectionRequest; checked: boolean[] } | null = null;
@@ -54,6 +56,7 @@ export function openSelection(request: SelectionRequest) {
     toggle(elements.selectionNote, hasDuplicates);
   }
   renderRows();
+  toggle(elements.selectionSingleBtn, Boolean(request.onSingleVideo));
   toggle(elements.selectionPanel, true);
   elements.selectionPanel?.scrollIntoView({ block: "nearest" });
 }
@@ -78,6 +81,14 @@ function renderCount() {
     elements.selectionConfirmBtn.disabled = count === 0 || confirming;
   }
   if (elements.selectionCancelBtn) elements.selectionCancelBtn.disabled = confirming;
+  if (elements.selectionSingleBtn) elements.selectionSingleBtn.disabled = confirming;
+}
+
+function chooseSingleVideo() {
+  const onSingleVideo = active?.request.onSingleVideo;
+  if (!onSingleVideo || confirming) return;
+  closeSelection();
+  onSingleVideo();
 }
 
 function renderRows() {
@@ -151,4 +162,5 @@ export function initSelectionUI() {
   elements.selectionNoneBtn?.addEventListener("click", () => setAll(false));
   elements.selectionConfirmBtn?.addEventListener("click", () => void confirmSelection());
   elements.selectionCancelBtn?.addEventListener("click", closeSelection);
+  elements.selectionSingleBtn?.addEventListener("click", chooseSingleVideo);
 }

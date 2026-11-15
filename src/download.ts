@@ -1,6 +1,6 @@
 import { bridge, type PlaylistItem, type StartDownloadOptions } from "./bridge";
 import { UI_STRINGS, elements, state } from "./state";
-import { errorMessage, looksLikePlaylist, parseUrlList, setUrlFieldValue, urlFieldValue } from "./utils";
+import { errorMessage, looksLikePlaylist, parseUrlList, setUrlFieldValue, singleVideoUrlOf, urlFieldValue } from "./utils";
 import { type EnqueueParams } from "./downloads";
 import { clearFieldErrors, setFieldError, setFieldHint } from "./ui/feedback";
 import { clearScheduleField } from "./ui/mode-controls";
@@ -89,7 +89,8 @@ async function openPlaylistSelection(
   url: string,
   buildParams: EntryParamsBuilder,
   onEnqueued: (failures: EnqueueFailure[]) => void,
-  cookiesBrowser?: string
+  cookiesBrowser?: string,
+  onSingleVideo?: () => void
 ) {
   setFieldHint(elements.urlError, UI_STRINGS.loadingPlaylist);
   let playlist;
@@ -106,7 +107,17 @@ async function openPlaylistSelection(
   }
   clearFieldErrors();
   const entries = await withDuplicateFlags(playlist.items);
-  openSelection({ heading: playlist.title || "Playlist", entries, buildParams, onEnqueued });
+  openSelection({ heading: playlist.title || "Playlist", entries, buildParams, onEnqueued, onSingleVideo });
+}
+
+/** Troca o link pelo do vídeo avulso e refaz a ação pelo mesmo caminho do clique original. */
+function singleVideoAction(url: string, retry: () => void): (() => void) | undefined {
+  const singleUrl = singleVideoUrlOf(url);
+  if (!singleUrl) return undefined;
+  return () => {
+    setUrlFieldValue(singleUrl);
+    retry();
+  };
 }
 
 /** Só limpa o campo quando tudo entrou: o que falhou continua lá para tentar de novo. */
@@ -127,7 +138,7 @@ function keepFailedUrls(failures: EnqueueFailure[]) {
  * são lidas se ele está visível (fase "ready"): com o painel escondido, um erro
  * de validação não teria onde aparecer.
  */
-export async function openAdvancedPlaylistSelection(url: string) {
+export async function openAdvancedPlaylistSelection(url: string, retryAsSingleVideo: () => void) {
   const outputPath = state.downloadPath;
   if (!outputPath) {
     setFieldError(elements.urlError, UI_STRINGS.errorNoPath);
@@ -142,7 +153,8 @@ export async function openAdvancedPlaylistSelection(url: string) {
       url,
       (entry) => ({ url: entry.url, title: entry.title, format: "best", formatLabel: "MP4", outputPath, options }),
       clearUrlFieldIfAllEnqueued,
-      options.cookiesBrowser
+      options.cookiesBrowser,
+      singleVideoAction(url, retryAsSingleVideo)
     );
   } finally {
     setPhase("idle");
@@ -237,7 +249,13 @@ export async function handleQuickDownload() {
   if (elements.quickDownloadBtn) elements.quickDownloadBtn.disabled = true;
   try {
     if (urls.length === 1 && looksLikePlaylist(urls[0])) {
-      await openPlaylistSelection(urls[0], buildParams, clearUrlFieldIfAllEnqueued);
+      await openPlaylistSelection(
+        urls[0],
+        buildParams,
+        clearUrlFieldIfAllEnqueued,
+        undefined,
+        singleVideoAction(urls[0], () => void handleQuickDownload())
+      );
       return;
     }
     const entries = await withDuplicateFlags(urls.map((url) => ({ url, title: null, durationSeconds: null })));

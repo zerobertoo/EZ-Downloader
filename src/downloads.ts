@@ -149,6 +149,7 @@ export function initDownloadsUI() {
     if (target.closest(".js-cancel")) void handleCancel(id);
     else if (target.closest(".js-pause")) void handleQueueAction(() => bridge.pauseDownload(id));
     else if (target.closest(".js-resume")) void handleQueueAction(() => bridge.resumeDownload(id));
+    else if (target.closest(".js-prioritize")) void handleQueueAction(() => bridge.reorderDownload(id, 0));
     else if (target.closest(".js-retry")) void handleRetry(id);
     else if (target.closest(".js-open-folder")) void handleOpenFolder(id);
     else if (target.closest(".js-remove")) handleRemove(id);
@@ -384,6 +385,12 @@ function buildProgressRegion(item: DownloadItem): HTMLElement {
   cancelBtn.className = "js-cancel btn-ghost h-[34px] px-[15px] text-xs font-medium pointer-coarse:min-h-11";
   cancelBtn.textContent = "Cancelar";
   actions.append(toggleBtn, cancelBtn);
+  if (item.phase === "queued") {
+    const prioritizeBtn = document.createElement("button");
+    prioritizeBtn.className = "js-prioritize btn-ghost h-[34px] px-[15px] text-xs font-medium pointer-coarse:min-h-11";
+    prioritizeBtn.textContent = UI_STRINGS.downloadPrioritize;
+    actions.prepend(prioritizeBtn);
+  }
   region.appendChild(actions);
 
   const statusText = header.querySelector(".progress-status-text") as HTMLElement;

@@ -69,6 +69,18 @@ export function looksLikePlaylist(url: string): boolean {
   }
 }
 
+/** Link de vídeo dentro de uma playlist (`watch?v=X&list=Y`): devolve o link só do vídeo, ou null se não for esse caso. */
+export function singleVideoUrlOf(url: string): string | null {
+  try {
+    const parsed = new URL(url);
+    if (!parsed.searchParams.has("v") || !parsed.searchParams.has("list")) return null;
+    for (const key of ["list", "index", "start_radio"]) parsed.searchParams.delete(key);
+    return parsed.toString();
+  } catch {
+    return null;
+  }
+}
+
 export function renderPlaylistHint() {
   if (!elements.playlistHint) return;
   const value = urlFieldValue();
