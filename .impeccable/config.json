@@ -35,6 +35,21 @@
         ],
         "createdAt": "2026-11-15T02:39:39.933Z",
         "reason": "decidido pelo Claude por delegacao do usuario: grao de filme (.noise-overlay, opacity 0.03) e textura sutil intencional do tema, anterior a Fase 2"
+      },
+      {
+        "rule": "design-system-font",
+        "value": "archivo ez",
+        "createdAt": "2026-11-15T03:57:49.211Z",
+        "reason": "decidido pelo Claude durante o redesign aprovado: Archivo variavel (OFL, self-hosted) e a fonte da direcao Locadora VHS; o DESIGN.md atual descreve a tipografia antiga e sera substituido ao final do redesign"
+      },
+      {
+        "rule": "layout-transition",
+        "value": "*",
+        "files": [
+          "src/styles/components.css"
+        ],
+        "createdAt": "2026-11-15T04:20:19.180Z",
+        "reason": "decidido pelo Claude: width animada so na pilula do segmented e no botao do switch, ambos position:absolute e pequenos, sem reflow de vizinhos; scaleX deformaria a pilula"
       }
     ]
   }
