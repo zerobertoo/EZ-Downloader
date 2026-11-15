@@ -3,6 +3,7 @@ import { UI_STRINGS, elements, state } from "./state";
 import { errorMessage, looksLikePlaylist, parseUrlList, setUrlFieldValue, urlFieldValue } from "./utils";
 import { type EnqueueParams } from "./downloads";
 import { clearFieldErrors, setFieldError, setFieldHint } from "./ui/feedback";
+import { clearScheduleField } from "./ui/mode-controls";
 import { render, setPhase } from "./ui/render";
 import { enqueueEntries, openSelection, reportEnqueueFailures, type EnqueueFailure, type SelectionEntry } from "./ui/selection";
 
@@ -40,6 +41,21 @@ function readAdvancedOptions(): StartDownloadOptions | null {
     return null;
   }
 
+  let scheduledAt: number | undefined;
+  const scheduleValue = elements.scheduleInput?.value;
+  if (scheduleValue) {
+    const timestamp = new Date(scheduleValue).getTime();
+    if (Number.isNaN(timestamp)) {
+      setFieldError(elements.scheduleError, UI_STRINGS.errorInvalidSchedule);
+      return null;
+    }
+    if (timestamp <= Date.now()) {
+      setFieldError(elements.scheduleError, UI_STRINGS.errorSchedulePast);
+      return null;
+    }
+    scheduledAt = Math.floor(timestamp / 1000);
+  }
+
   return {
     sectionStart,
     sectionEnd,
@@ -47,6 +63,13 @@ function readAdvancedOptions(): StartDownloadOptions | null {
     extraArgs: elements.extraArgsInput?.value.trim() || undefined,
     cookiesBrowser: elements.cookiesBrowserSelect?.value || undefined,
     limitRate,
+    nameTemplate: elements.nameTemplateInput?.value.trim() || undefined,
+    embedThumbnail: elements.embedThumbnailCheckbox?.checked || undefined,
+    embedChapters: elements.embedChaptersCheckbox?.checked || undefined,
+    embedMetadata: elements.embedMetadataCheckbox?.checked || undefined,
+    sponsorblock: (elements.sponsorblockSelect?.value as "remove" | "mark" | "") || undefined,
+    proxy: elements.proxyInput?.value.trim() || undefined,
+    scheduledAt,
   };
 }
 
@@ -88,7 +111,9 @@ async function openPlaylistSelection(
 
 /** Só limpa o campo quando tudo entrou: o que falhou continua lá para tentar de novo. */
 function clearUrlFieldIfAllEnqueued(failures: EnqueueFailure[]) {
-  if (failures.length === 0) setUrlFieldValue("");
+  if (failures.length > 0) return;
+  setUrlFieldValue("");
+  clearScheduleField();
 }
 
 /** Deixa no campo só as URLs que falharam, para o usuário poder tentar de novo. */
@@ -156,6 +181,7 @@ export async function handleDownload() {
     }
     const failures = await enqueueEntries(entries, () => params);
     reportEnqueueFailures(failures, 1);
+    if (failures.length === 0) clearScheduleField();
   } catch (error) {
     console.error("Erro ao iniciar download:", error);
     setFieldError(elements.urlError, `${UI_STRINGS.errorStartDownload} ${errorMessage(error)}`);

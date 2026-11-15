@@ -3,7 +3,7 @@ use crate::download_manager::{DownloadManager, DownloadOptions, FormatsResult};
 use crate::history::HistoryEntry;
 use crate::playlist::PlaylistResult;
 use crate::queue::QueueItem;
-use crate::settings::Settings;
+use crate::settings::{Preset, Settings};
 use serde::Serialize;
 use tauri::{AppHandle, Manager, State};
 use tauri_plugin_dialog::DialogExt;
@@ -65,6 +65,13 @@ pub fn start_download(
     extra_args: Option<String>,
     cookies_browser: Option<String>,
     limit_rate: Option<String>,
+    name_template: Option<String>,
+    embed_thumbnail: Option<bool>,
+    embed_chapters: Option<bool>,
+    embed_metadata: Option<bool>,
+    sponsorblock: Option<String>,
+    proxy: Option<String>,
+    scheduled_at: Option<i64>,
 ) -> Result<String, String> {
     // Validações síncronas: erro aqui chega na hora pro frontend. Depois
     // disso o download roda em background e o fim chega via "download-finished".
@@ -77,8 +84,14 @@ pub fn start_download(
         extra_args,
         cookies_browser,
         limit_rate,
+        name_template,
+        embed_thumbnail: embed_thumbnail.unwrap_or(false),
+        embed_chapters: embed_chapters.unwrap_or(false),
+        embed_metadata: embed_metadata.unwrap_or(false),
+        sponsorblock,
+        proxy,
     };
-    manager.start_download(&app, &url, &format, title, Some(output_path), options)
+    manager.start_download(&app, &url, &format, title, Some(output_path), options, scheduled_at)
 }
 
 #[tauri::command]
@@ -154,6 +167,24 @@ pub fn find_duplicates(manager: State<DownloadManager>, urls: Vec<String>) -> Ve
 #[tauri::command]
 pub fn set_clipboard_monitor(manager: State<DownloadManager>, enabled: bool) -> Settings {
     manager.set_clipboard_monitor(enabled)
+}
+
+#[tauri::command]
+pub fn save_preset(manager: State<DownloadManager>, preset: Preset) -> Result<Settings, String> {
+    manager.save_preset(preset)
+}
+
+#[tauri::command]
+pub fn delete_preset(manager: State<DownloadManager>, name: String) -> Settings {
+    manager.delete_preset(&name)
+}
+
+#[tauri::command]
+pub fn set_default_proxy(
+    manager: State<DownloadManager>,
+    proxy: Option<String>,
+) -> Result<Settings, String> {
+    manager.set_default_proxy(proxy)
 }
 
 #[tauri::command]

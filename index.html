@@ -261,6 +261,67 @@
                 <p id="limitRateError" class="field-error mt-0.5" role="alert"></p>
               </div>
 
+              <div class="flex flex-col gap-2 pt-4">
+                <label for="presetSelect" class="field-label">Preset</label>
+                <select id="presetSelect" class="field-input" aria-label="Aplicar preset salvo">
+                  <option value="">Nenhum</option>
+                </select>
+                <div class="flex gap-2">
+                  <input type="text" id="presetNameInput" class="field-input" placeholder="Nome para salvar o preset" aria-label="Nome do preset" maxlength="40" />
+                  <button type="button" id="presetSaveBtn" class="field-input w-auto shrink-0 cursor-pointer px-3">Salvar</button>
+                  <button type="button" id="presetDeleteBtn" class="field-input w-auto shrink-0 cursor-pointer px-3" disabled>Excluir</button>
+                </div>
+                <p id="presetError" class="field-error mt-0.5" role="alert"></p>
+              </div>
+
+              <div class="flex flex-col gap-2 pt-4">
+                <label for="nameTemplateInput" class="field-label">Nome do arquivo (opcional)</label>
+                <input type="text" id="nameTemplateInput" class="field-input" placeholder="{uploader}/{title}" aria-label="Template do nome do arquivo" />
+                <p class="field-note">Campos: {title}, {uploader}, {channel}, {date}, {year}, {id}, {playlist}, {index}, {resolution}. Use / para criar subpastas dentro do destino.</p>
+              </div>
+
+              <div class="flex flex-col gap-2 pt-4">
+                <label class="field-label cursor-pointer text-[0.8125rem] tracking-normal text-fg normal-case">
+                  <input type="checkbox" id="embedThumbnailCheckbox" class="size-4 cursor-pointer accent-accent" />
+                  Incorporar capa
+                </label>
+                <label class="field-label cursor-pointer text-[0.8125rem] tracking-normal text-fg normal-case">
+                  <input type="checkbox" id="embedChaptersCheckbox" class="size-4 cursor-pointer accent-accent" />
+                  Incorporar capítulos
+                </label>
+                <label class="field-label cursor-pointer text-[0.8125rem] tracking-normal text-fg normal-case">
+                  <input type="checkbox" id="embedMetadataCheckbox" class="size-4 cursor-pointer accent-accent" />
+                  Incorporar metadados
+                </label>
+              </div>
+
+              <div class="flex flex-col gap-2 pt-4">
+                <label for="sponsorblockSelect" class="field-label">SponsorBlock</label>
+                <select id="sponsorblockSelect" class="field-input" aria-label="Tratamento de trechos patrocinados">
+                  <option value="">Desligado</option>
+                  <option value="mark">Marcar como capítulos</option>
+                  <option value="remove">Remover do vídeo</option>
+                </select>
+                <p class="field-note">Trata patrocínio, autopromoção e pedidos de interação. Remover recodifica com o ffmpeg e demora mais.</p>
+              </div>
+
+              <div class="flex flex-col gap-2 pt-4">
+                <label for="proxyInput" class="field-label">Proxy (opcional)</label>
+                <div class="flex gap-2">
+                  <input type="text" id="proxyInput" class="field-input" placeholder="socks5://127.0.0.1:1080" aria-label="URL do proxy" />
+                  <button type="button" id="proxySaveDefaultBtn" class="field-input w-auto shrink-0 cursor-pointer px-3">Salvar como padrão</button>
+                </div>
+                <p id="proxyError" class="field-error mt-0.5" role="alert"></p>
+                <p class="field-note">Sem usuário e senha na URL: ela fica gravada em texto puro. Vazio usa o proxy padrão, se houver.</p>
+              </div>
+
+              <div class="flex flex-col gap-2 pt-4">
+                <label for="scheduleInput" class="field-label">Agendar para (opcional)</label>
+                <input type="datetime-local" id="scheduleInput" class="field-input" aria-label="Data e hora de início" />
+                <p id="scheduleError" class="field-error mt-0.5" role="alert"></p>
+                <p class="field-note">Horário local. Se o app estiver fechado na hora, o download começa quando você abri-lo.</p>
+              </div>
+
               <!-- Argumentos extras (allowlist validada no backend) -->
               <div class="flex flex-col gap-2 pt-4">
                 <label for="extraArgsInput" class="field-label">Argumentos extras (yt-dlp)</label>

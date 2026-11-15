@@ -74,6 +74,14 @@ export interface StartDownloadOptions {
   extraArgs?: string;
   cookiesBrowser?: string;
   limitRate?: string;
+  nameTemplate?: string;
+  embedThumbnail?: boolean;
+  embedChapters?: boolean;
+  embedMetadata?: boolean;
+  sponsorblock?: "remove" | "mark";
+  proxy?: string;
+  /** Segundos Unix (UTC): o download só começa a partir desse instante. */
+  scheduledAt?: number;
 }
 
 /** Item pendente da fila persistida no backend (terminados vão para o histórico). */
@@ -89,14 +97,32 @@ export interface QueueItem {
     extraArgs: string | null;
     cookiesBrowser: string | null;
     limitRate: string | null;
+    nameTemplate: string | null;
+    embedThumbnail: boolean;
+    embedChapters: boolean;
+    embedMetadata: boolean;
+    sponsorblock: "remove" | "mark" | null;
+    proxy: string | null;
   };
   status: "queued" | "active" | "paused";
+  scheduledAt: number | null;
+}
+
+export interface Preset {
+  name: string;
+  nameTemplate: string | null;
+  embedThumbnail: boolean;
+  embedChapters: boolean;
+  embedMetadata: boolean;
+  sponsorblock: "remove" | "mark" | null;
 }
 
 export interface Settings {
   maxConcurrent: number;
   downloadPath: string | null;
   clipboardMonitor: boolean;
+  presets: Preset[];
+  defaultProxy: string | null;
 }
 
 export interface PlaylistItem {
@@ -158,6 +184,13 @@ export const bridge = {
       extraArgs: options.extraArgs ?? null,
       cookiesBrowser: options.cookiesBrowser ?? null,
       limitRate: options.limitRate ?? null,
+      nameTemplate: options.nameTemplate ?? null,
+      embedThumbnail: options.embedThumbnail ?? null,
+      embedChapters: options.embedChapters ?? null,
+      embedMetadata: options.embedMetadata ?? null,
+      sponsorblock: options.sponsorblock ?? null,
+      proxy: options.proxy ?? null,
+      scheduledAt: options.scheduledAt ?? null,
     }),
 
   selectDownloadPath: (): Promise<string | null> => invoke("select_download_path"),
@@ -183,6 +216,12 @@ export const bridge = {
   setDownloadPath: (path: string | null): Promise<Settings> => invoke("set_download_path", { path }),
 
   setClipboardMonitor: (enabled: boolean): Promise<Settings> => invoke("set_clipboard_monitor", { enabled }),
+
+  savePreset: (preset: Preset): Promise<Settings> => invoke("save_preset", { preset }),
+
+  deletePreset: (name: string): Promise<Settings> => invoke("delete_preset", { name }),
+
+  setDefaultProxy: (proxy: string | null): Promise<Settings> => invoke("set_default_proxy", { proxy }),
 
   getPlaylist: (url: string, cookiesBrowser?: string): Promise<PlaylistResult> =>
     invoke("get_playlist", { url, cookiesBrowser: cookiesBrowser ?? null }),

@@ -27,4 +27,6 @@ export function clearFieldErrors() {
   clearFieldError(elements.pathError);
   clearFieldError(elements.sectionError);
   clearFieldError(elements.limitRateError);
+  clearFieldError(elements.scheduleError);
+  clearFieldError(elements.proxyError);
 }

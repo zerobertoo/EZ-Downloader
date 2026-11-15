@@ -4,7 +4,7 @@ use crate::playlist::{parse_playlist, PlaylistResult};
 use crate::process_runner::{spawn_process, ProcessHandle, ProcessOutput};
 pub use crate::queue::DownloadOptions;
 use crate::queue::{self, ItemStatus, QueueItem, QueueState};
-use crate::settings::{Settings, SettingsStore};
+use crate::settings::{Preset, Settings, SettingsStore};
 use regex::Regex;
 use serde::Serialize;
 use std::collections::{HashMap, HashSet};
@@ -16,6 +16,7 @@ use tauri_plugin_notification::NotificationExt;
 use uuid::Uuid;
 
 const PROGRESS_THROTTLE_MS: u128 = 500;
+const SCHEDULER_MAX_SLEEP_SECS: u64 = 30;
 const FORMATS_PROBE_TIMEOUT: Duration = Duration::from_secs(30);
 // Playlists grandes levam bem mais que um vídeo só pra listar.
 const PLAYLIST_PROBE_TIMEOUT: Duration = Duration::from_secs(120);
@@ -60,6 +61,13 @@ pub struct DownloadFinished {
     #[serde(rename = "filePath")]
     pub file_path: Option<String>,
     pub error: Option<String>,
+}
+
+fn unix_now() -> i64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs() as i64)
+        .unwrap_or(0)
 }
 
 fn path_file_for(id: &str) -> PathBuf {
@@ -226,6 +234,32 @@ fn limit_rate_args(raw: &str) -> Result<Vec<String>, String> {
     Ok(vec!["--limit-rate".to_string(), validate_limit_rate(raw)?])
 }
 
+/// Aceita só host:porta com esquema conhecido. Credenciais (`user:senha@`) são
+/// recusadas porque a URL do proxy é gravada em texto puro na fila.
+fn validate_proxy(raw: &str) -> Result<String, String> {
+    let raw = raw.trim();
+    let parsed = url::Url::parse(raw).map_err(|_| format!("Proxy inválido: {raw}"))?;
+    if !matches!(parsed.scheme(), "http" | "https" | "socks4" | "socks4a" | "socks5" | "socks5h") {
+        return Err(format!("Esquema de proxy não suportado: {}", parsed.scheme()));
+    }
+    if parsed.host_str().is_none() {
+        return Err(format!("Proxy sem host: {raw}"));
+    }
+    if !parsed.username().is_empty() || parsed.password().is_some() {
+        return Err("Proxy com usuário e senha não é suportado: as credenciais seriam gravadas em texto puro".to_string());
+    }
+    Ok(raw.to_string())
+}
+
+fn sponsorblock_args(mode: &str) -> Result<Vec<String>, String> {
+    let flag = match mode {
+        "remove" => "--sponsorblock-remove",
+        "mark" => "--sponsorblock-mark",
+        _ => return Err(format!("Modo de SponsorBlock inválido: {mode}")),
+    };
+    Ok(vec![flag.to_string(), "sponsor,selfpromo,interaction".to_string()])
+}
+
 /// Args de seleção pro Modo Rápido — sem chamada prévia de metadados,
 /// direto na melhor qualidade disponível pro formato escolhido.
 fn quick_download_args(mode: &str) -> Vec<String> {
@@ -336,6 +370,7 @@ impl DownloadManager {
     pub fn get_available_formats(&self, url: &str) -> Result<FormatsResult, String> {
         let mut args = vec!["--dump-json".to_string(), "--no-warnings".to_string()];
         push_ejs_args(&mut args, self.qjs_bin.as_deref());
+        args.extend(self.default_proxy_args());
         args.push(url.to_string());
         let ytdlp_bin = self.current_ytdlp_bin();
         let output = run_probe(&ytdlp_bin, &args, FORMATS_PROBE_TIMEOUT)?;
@@ -368,12 +403,16 @@ impl DownloadManager {
         title: Option<String>,
         output_path: Option<String>,
         options: DownloadOptions,
+        scheduled_at: Option<i64>,
     ) -> Result<String, String> {
         let download_dir = output_path
             .map(PathBuf::from)
             .unwrap_or_else(|| self.default_download_path.clone());
         std::fs::create_dir_all(&download_dir).map_err(|e| e.to_string())?;
 
+        if scheduled_at.is_some_and(|at| at <= unix_now()) {
+            return Err("O horário agendado já passou".to_string());
+        }
         let item = QueueItem {
             id: Uuid::new_v4().to_string(),
             url: url.to_string(),
@@ -382,6 +421,7 @@ impl DownloadManager {
             output_dir: download_dir.to_string_lossy().to_string(),
             options,
             status: ItemStatus::Queued,
+            scheduled_at,
         };
         // Valida agora: um erro nas opções chega na hora pro frontend, em vez
         // de só aparecer quando o item chegar ao topo da fila.
@@ -397,6 +437,42 @@ impl DownloadManager {
         Ok(id)
     }
 
+    /// Proxy padrão das configurações. Um valor inválido (arquivo editado à mão)
+    /// é ignorado com aviso em vez de derrubar todos os downloads e buscas.
+    fn default_proxy_args(&self) -> Vec<String> {
+        let Some(proxy) = self.settings.get().default_proxy else {
+            return Vec::new();
+        };
+        match validate_proxy(&proxy) {
+            Ok(valid) => vec!["--proxy".to_string(), valid],
+            Err(error) => {
+                log::warn!("Proxy padrão ignorado: {error}");
+                Vec::new()
+            }
+        }
+    }
+
+    /// Thread única que dorme até o próximo horário agendado e promove o que
+    /// venceu. Acorda a cada 30 s para reavaliar: cobre itens agendados depois
+    /// do início, suspensão do computador e mudança do relógio.
+    pub fn start_scheduler(&self, app: &AppHandle) {
+        let manager = self.clone();
+        let app = app.clone();
+        std::thread::spawn(move || loop {
+            let now = unix_now();
+            let wait = manager
+                .queue
+                .lock()
+                .unwrap()
+                .next_schedule_after(now)
+                .map(|at| (at - now) as u64)
+                .unwrap_or(SCHEDULER_MAX_SLEEP_SECS)
+                .clamp(1, SCHEDULER_MAX_SLEEP_SECS);
+            std::thread::sleep(Duration::from_secs(wait));
+            manager.pump(&app);
+        });
+    }
+
     /// Promove os itens da fila aos slots livres e inicia seus processos.
     /// Só grava e emite quando algo foi promovido: quem muda a fila por
     /// outro motivo já persiste por conta própria.
@@ -405,7 +481,7 @@ impl DownloadManager {
             let mut queue = self.queue.lock().unwrap();
             // Processos pausados que ainda estão morrendo seguem ocupando slot.
             let dying = self.paused.lock().unwrap().clone();
-            let started = queue.promote(&dying);
+            let started = queue.promote(&dying, unix_now());
             if !started.is_empty() {
                 self.persist_and_emit(app, &queue);
             }
@@ -428,7 +504,14 @@ impl DownloadManager {
     fn build_download_args(&self, item: &QueueItem) -> Result<Vec<String>, String> {
         let format = item.format.as_str();
         let options = &item.options;
-        let output_template = PathBuf::from(&item.output_dir).join("%(title)s.%(ext)s");
+        let name_template = crate::output_template::to_ytdlp_template(
+            options
+                .name_template
+                .as_deref()
+                .unwrap_or(crate::output_template::DEFAULT_TEMPLATE),
+        )?;
+        let output_template =
+            PathBuf::from(&item.output_dir).join(format!("{name_template}.%(ext)s"));
         let mut args = match format {
             "quick-mp3" => quick_download_args("mp3"),
             "quick-mp4" => quick_download_args("mp4"),
@@ -464,6 +547,24 @@ impl DownloadManager {
         }
         if let Some(rate) = &options.limit_rate {
             args.extend(limit_rate_args(rate)?);
+        }
+        if options.embed_thumbnail {
+            args.push("--embed-thumbnail".to_string());
+        }
+        if options.embed_chapters {
+            args.push("--embed-chapters".to_string());
+        }
+        if options.embed_metadata {
+            args.push("--embed-metadata".to_string());
+        }
+        if let Some(mode) = &options.sponsorblock {
+            args.extend(sponsorblock_args(mode)?);
+        }
+        if let Some(proxy) = &options.proxy {
+            args.push("--proxy".to_string());
+            args.push(validate_proxy(proxy)?);
+        } else {
+            args.extend(self.default_proxy_args());
         }
         if let Some(extra) = &options.extra_args {
             args.extend(validate_extra_args(extra)?);
@@ -770,6 +871,22 @@ impl DownloadManager {
         self.settings.set_download_path(path)
     }
 
+    pub fn save_preset(&self, preset: Preset) -> Result<Settings, String> {
+        self.settings.save_preset(preset)
+    }
+
+    pub fn delete_preset(&self, name: &str) -> Settings {
+        self.settings.delete_preset(name)
+    }
+
+    pub fn set_default_proxy(&self, proxy: Option<String>) -> Result<Settings, String> {
+        let proxy = match proxy.map(|p| p.trim().to_string()).filter(|p| !p.is_empty()) {
+            Some(value) => Some(validate_proxy(&value)?),
+            None => None,
+        };
+        Ok(self.settings.set_default_proxy(proxy))
+    }
+
     pub fn set_clipboard_monitor(&self, enabled: bool) -> Settings {
         self.settings.set_clipboard_monitor(enabled)
     }
@@ -788,6 +905,7 @@ impl DownloadManager {
         if let Some(browser) = cookies_browser {
             args.extend(cookies_browser_args(browser)?);
         }
+        args.extend(self.default_proxy_args());
         args.push(url.to_string());
         let output = run_probe(&self.current_ytdlp_bin(), &args, PLAYLIST_PROBE_TIMEOUT)?;
         if output.code == 0 {
@@ -1108,6 +1226,23 @@ mod tests {
                 "en,pt".to_string(),
             ]
         );
+    }
+
+    #[test]
+    fn proxy_accepts_known_schemes_and_rejects_credentials() {
+        assert!(validate_proxy("http://127.0.0.1:8080").is_ok());
+        assert!(validate_proxy("socks5://proxy.local:1080").is_ok());
+        assert!(validate_proxy("http://user:pass@host:8080").is_err());
+        assert!(validate_proxy("http://user@host:8080").is_err());
+        assert!(validate_proxy("ftp://host:21").is_err());
+        assert!(validate_proxy("not a url").is_err());
+    }
+
+    #[test]
+    fn sponsorblock_modes_map_to_flags_and_reject_unknown() {
+        assert_eq!(sponsorblock_args("remove").unwrap()[0], "--sponsorblock-remove");
+        assert_eq!(sponsorblock_args("mark").unwrap()[0], "--sponsorblock-mark");
+        assert!(sponsorblock_args("all").is_err());
     }
 
     #[test]

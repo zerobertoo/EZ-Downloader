@@ -15,6 +15,23 @@ pub struct Settings {
     pub max_concurrent: usize,
     pub download_path: Option<String>,
     pub clipboard_monitor: bool,
+    pub presets: Vec<Preset>,
+    pub default_proxy: Option<String>,
+}
+
+pub const MAX_PRESETS: usize = 30;
+const MAX_PRESET_NAME_LENGTH: usize = 40;
+
+/// Combinação nomeada de opções de download reaproveitável com um clique.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase", default)]
+pub struct Preset {
+    pub name: String,
+    pub name_template: Option<String>,
+    pub embed_thumbnail: bool,
+    pub embed_chapters: bool,
+    pub embed_metadata: bool,
+    pub sponsorblock: Option<String>,
 }
 
 impl Default for Settings {
@@ -24,6 +41,8 @@ impl Default for Settings {
             max_concurrent: DEFAULT_CONCURRENT_DOWNLOADS,
             download_path: None,
             clipboard_monitor: false,
+            presets: Vec::new(),
+            default_proxy: None,
         }
     }
 }
@@ -61,6 +80,48 @@ impl SettingsStore {
 
     pub fn set_clipboard_monitor(&self, enabled: bool) -> Settings {
         self.update(|s| s.clipboard_monitor = enabled)
+    }
+
+    /// Substitui o preset de mesmo nome (sem diferenciar maiúsculas) ou cria um novo.
+    pub fn save_preset(&self, preset: Preset) -> Result<Settings, String> {
+        let name = preset.name.trim().to_string();
+        if name.is_empty() {
+            return Err("O preset precisa de um nome".to_string());
+        }
+        if name.chars().count() > MAX_PRESET_NAME_LENGTH {
+            return Err(format!("O nome do preset passa de {MAX_PRESET_NAME_LENGTH} caracteres"));
+        }
+        if let Some(mode) = &preset.sponsorblock {
+            if !matches!(mode.as_str(), "remove" | "mark") {
+                return Err(format!("Modo de SponsorBlock inválido: {mode}"));
+            }
+        }
+        if let Some(template) = &preset.name_template {
+            crate::output_template::to_ytdlp_template(template)?;
+        }
+        let preset = Preset { name, ..preset };
+        let mut settings = self.settings.lock().unwrap();
+        match settings
+            .presets
+            .iter()
+            .position(|p| p.name.eq_ignore_ascii_case(&preset.name))
+        {
+            Some(index) => settings.presets[index] = preset,
+            None if settings.presets.len() >= MAX_PRESETS => {
+                return Err(format!("Limite de {MAX_PRESETS} presets atingido"));
+            }
+            None => settings.presets.push(preset),
+        }
+        self.persist(&settings);
+        Ok(settings.clone())
+    }
+
+    pub fn delete_preset(&self, name: &str) -> Settings {
+        self.update(|s| s.presets.retain(|p| !p.name.eq_ignore_ascii_case(name)))
+    }
+
+    pub fn set_default_proxy(&self, proxy: Option<String>) -> Settings {
+        self.update(|s| s.default_proxy = proxy)
     }
 
     fn update(&self, change: impl FnOnce(&mut Settings)) -> Settings {
@@ -137,6 +198,39 @@ mod tests {
         assert!(!store.get().clipboard_monitor);
         store.set_clipboard_monitor(true);
         assert!(SettingsStore::new(path).get().clipboard_monitor);
+    }
+
+    fn preset(name: &str) -> Preset {
+        Preset {
+            name: name.to_string(),
+            ..Preset::default()
+        }
+    }
+
+    #[test]
+    fn preset_is_saved_replaced_by_name_and_deleted() {
+        let store = SettingsStore::new(temp_path());
+        store.save_preset(preset("Música")).unwrap();
+        let mut updated = preset("música");
+        updated.embed_metadata = true;
+        let settings = store.save_preset(updated).unwrap();
+        assert_eq!(settings.presets.len(), 1);
+        assert!(settings.presets[0].embed_metadata);
+        assert!(store.delete_preset("MÚSICA").presets.len() == 1);
+        assert!(store.delete_preset("música").presets.is_empty());
+    }
+
+    #[test]
+    fn preset_rejects_blank_name_and_bad_template() {
+        let store = SettingsStore::new(temp_path());
+        assert!(store.save_preset(preset("  ")).is_err());
+        let mut bad = preset("x");
+        bad.name_template = Some("../{title}".to_string());
+        assert!(store.save_preset(bad).is_err());
+        let mut bad_mode = preset("y");
+        bad_mode.sponsorblock = Some("foo".to_string());
+        assert!(store.save_preset(bad_mode).is_err());
+        assert!(store.save_preset(preset(&"n".repeat(41))).is_err());
     }
 
     #[test]

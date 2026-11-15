@@ -73,6 +73,23 @@ export function handleToggleMode() {
   if (elements.extraArgsInput) elements.extraArgsInput.value = "";
   if (elements.cookiesBrowserSelect) elements.cookiesBrowserSelect.value = "";
   if (elements.limitRateInput) elements.limitRateInput.value = "";
+  resetNewAdvancedFields();
+}
+
+export function resetNewAdvancedFields() {
+  if (elements.nameTemplateInput) elements.nameTemplateInput.value = "";
+  if (elements.embedThumbnailCheckbox) elements.embedThumbnailCheckbox.checked = false;
+  if (elements.embedChaptersCheckbox) elements.embedChaptersCheckbox.checked = false;
+  if (elements.embedMetadataCheckbox) elements.embedMetadataCheckbox.checked = false;
+  if (elements.sponsorblockSelect) elements.sponsorblockSelect.value = "";
+  if (elements.proxyInput) elements.proxyInput.value = "";
+  if (elements.presetSelect) elements.presetSelect.value = "";
+  if (elements.presetDeleteBtn) elements.presetDeleteBtn.disabled = true;
+  clearScheduleField();
+}
+
+export function clearScheduleField() {
+  if (elements.scheduleInput) elements.scheduleInput.value = "";
 }
 
 export function setQuickFormat(format: "mp4" | "mp3") {

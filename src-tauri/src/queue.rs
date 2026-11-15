@@ -12,13 +12,21 @@ const QUEUE_FILE_VERSION: u32 = 1;
 /// Opções do Modo Avançado: todas opcionais, ausentes no Modo Rápido.
 /// Cookies guardam só o nome do navegador, nunca o conteúdo.
 #[derive(Debug, Default, Clone, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", default)]
 pub struct DownloadOptions {
     pub section: Option<(String, String)>,
     pub sub_langs: Option<String>,
     pub extra_args: Option<String>,
     pub cookies_browser: Option<String>,
     pub limit_rate: Option<String>,
+    pub name_template: Option<String>,
+    pub embed_thumbnail: bool,
+    pub embed_chapters: bool,
+    pub embed_metadata: bool,
+    /// "remove" corta os trechos patrocinados; "mark" só cria capítulos para eles.
+    pub sponsorblock: Option<String>,
+    /// Sem credenciais: a URL do proxy é gravada em texto puro na fila.
+    pub proxy: Option<String>,
 }
 
 /// A fila só guarda itens pendentes; ao terminar, o item vai para o histórico.
@@ -40,6 +48,10 @@ pub struct QueueItem {
     pub output_dir: String,
     pub options: DownloadOptions,
     pub status: ItemStatus,
+    /// Instante (segundos Unix, UTC) a partir do qual o item pode começar.
+    /// Quem converte o horário local do usuário é o frontend.
+    #[serde(default)]
+    pub scheduled_at: Option<i64>,
 }
 
 #[derive(Debug)]
@@ -116,7 +128,9 @@ impl QueueState {
     ///
     /// `dying` são ids pausados cujo processo ainda está sendo encerrado: eles
     /// continuam ocupando um slot e não podem ser reiniciados até morrerem.
-    pub fn promote(&mut self, dying: &HashSet<String>) -> Vec<QueueItem> {
+    ///
+    /// Itens agendados para depois de `now` (segundos Unix) ficam na fila.
+    pub fn promote(&mut self, dying: &HashSet<String>, now: i64) -> Vec<QueueItem> {
         let busy_slots = self.active_count() + dying.len();
         let mut free_slots = self.max_concurrent.saturating_sub(busy_slots);
         let mut started = Vec::new();
@@ -124,13 +138,24 @@ impl QueueState {
             if free_slots == 0 {
                 break;
             }
-            if item.status == ItemStatus::Queued && !dying.contains(&item.id) {
+            let due = item.scheduled_at.is_none_or(|at| at <= now);
+            if item.status == ItemStatus::Queued && due && !dying.contains(&item.id) {
                 item.status = ItemStatus::Active;
                 started.push(item.clone());
                 free_slots -= 1;
             }
         }
         started
+    }
+
+    /// Próximo horário agendado (de itens `queued`) estritamente depois de `now`.
+    pub fn next_schedule_after(&self, now: i64) -> Option<i64> {
+        self.items
+            .iter()
+            .filter(|i| i.status == ItemStatus::Queued)
+            .filter_map(|i| i.scheduled_at)
+            .filter(|&at| at > now)
+            .min()
     }
 
     /// Pausa um item. Devolve o status anterior (quem pausa um ativo precisa
@@ -160,7 +185,7 @@ impl QueueState {
         Some(self.items.remove(index))
     }
 
-        pub fn reorder(&mut self, id: &str, new_index: usize) -> bool {
+    pub fn reorder(&mut self, id: &str, new_index: usize) -> bool {
         let Some(from) = self.items.iter().position(|i| i.id == id) else {
             return false;
         };
@@ -221,6 +246,7 @@ mod tests {
             output_dir: "/tmp/dl".to_string(),
             options: DownloadOptions::default(),
             status: ItemStatus::Queued,
+            scheduled_at: None,
         }
     }
 
@@ -234,10 +260,10 @@ mod tests {
         for id in ["a", "b", "c"] {
             state.enqueue(item(id));
         }
-        let started = state.promote(&HashSet::new());
+        let started = state.promote(&HashSet::new(), 0);
         assert_eq!(started.iter().map(|i| i.id.as_str()).collect::<Vec<_>>(), ["a", "b"]);
         assert_eq!(state.status_of("c"), Some(ItemStatus::Queued));
-        assert!(state.promote(&HashSet::new()).is_empty());
+        assert!(state.promote(&HashSet::new(), 0).is_empty());
     }
 
     #[test]
@@ -245,9 +271,9 @@ mod tests {
         let mut state = QueueState::new(1);
         state.enqueue(item("a"));
         state.enqueue(item("b"));
-        state.promote(&HashSet::new());
+        state.promote(&HashSet::new(), 0);
         state.remove("a");
-        let started = state.promote(&HashSet::new());
+        let started = state.promote(&HashSet::new(), 0);
         assert_eq!(started.len(), 1);
         assert_eq!(started[0].id, "b");
     }
@@ -257,10 +283,10 @@ mod tests {
         let mut state = QueueState::new(1);
         state.enqueue(item("a"));
         state.enqueue(item("b"));
-        state.promote(&HashSet::new());
+        state.promote(&HashSet::new(), 0);
         assert_eq!(state.pause("a"), Some(ItemStatus::Active));
         assert_eq!(state.pause("a"), None);
-        assert_eq!(state.promote(&HashSet::new())[0].id, "b");
+        assert_eq!(state.promote(&HashSet::new(), 0)[0].id, "b");
     }
 
     #[test]
@@ -268,13 +294,13 @@ mod tests {
         let mut state = QueueState::new(1);
         state.enqueue(item("a"));
         state.enqueue(item("b"));
-        state.promote(&HashSet::new());
+        state.promote(&HashSet::new(), 0);
         state.pause("a");
         let dying: HashSet<String> = ["a".to_string()].into();
-        assert!(state.promote(&dying).is_empty());
+        assert!(state.promote(&dying, 0).is_empty());
         state.resume("a");
-        assert!(state.promote(&dying).is_empty());
-        let started = state.promote(&HashSet::new());
+        assert!(state.promote(&dying, 0).is_empty());
+        let started = state.promote(&HashSet::new(), 0);
         assert_eq!(started[0].id, "a");
     }
 
@@ -283,7 +309,7 @@ mod tests {
         let mut state = QueueState::new(3);
         state.enqueue(item("a"));
         assert_eq!(state.pause("a"), Some(ItemStatus::Queued));
-        assert!(state.promote(&HashSet::new()).is_empty());
+        assert!(state.promote(&HashSet::new(), 0).is_empty());
     }
 
     #[test]
@@ -316,7 +342,7 @@ mod tests {
         state.enqueue(item("a"));
         state.enqueue(item("b"));
         state.reorder("b", 0);
-        assert_eq!(state.promote(&HashSet::new())[0].id, "b");
+        assert_eq!(state.promote(&HashSet::new(), 0)[0].id, "b");
     }
 
     #[test]
@@ -325,15 +351,44 @@ mod tests {
         for id in ["a", "b", "c", "d"] {
             state.enqueue(item(id));
         }
-        state.promote(&HashSet::new());
+        state.promote(&HashSet::new(), 0);
         state.set_max_concurrent(1);
         assert_eq!(state.status_of("a"), Some(ItemStatus::Active));
         assert_eq!(state.status_of("c"), Some(ItemStatus::Active));
         state.remove("a");
         state.remove("b");
-        assert!(state.promote(&HashSet::new()).is_empty());
+        assert!(state.promote(&HashSet::new(), 0).is_empty());
         state.remove("c");
-        assert_eq!(state.promote(&HashSet::new())[0].id, "d");
+        assert_eq!(state.promote(&HashSet::new(), 0)[0].id, "d");
+    }
+
+    #[test]
+    fn scheduled_item_waits_for_its_time_without_blocking_others() {
+        let mut state = QueueState::new(1);
+        let mut later = item("later");
+        later.scheduled_at = Some(1000);
+        state.enqueue(later);
+        state.enqueue(item("now"));
+        assert_eq!(state.promote(&HashSet::new(), 999)[0].id, "now");
+        state.remove("now");
+        assert!(state.promote(&HashSet::new(), 999).is_empty());
+        assert_eq!(state.promote(&HashSet::new(), 1000)[0].id, "later");
+    }
+
+    #[test]
+    fn next_schedule_returns_earliest_future_time_among_queued() {
+        let mut state = QueueState::new(1);
+        let mut a = item("a");
+        a.scheduled_at = Some(500);
+        let mut b = item("b");
+        b.scheduled_at = Some(300);
+        let mut past = item("past");
+        past.scheduled_at = Some(10);
+        state.enqueue(a);
+        state.enqueue(b);
+        state.enqueue(past);
+        assert_eq!(state.next_schedule_after(100), Some(300));
+        assert_eq!(state.next_schedule_after(500), None);
     }
 
     #[test]

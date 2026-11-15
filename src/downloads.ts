@@ -84,14 +84,21 @@ function formatLabelFor(format: string): string {
   return format;
 }
 
-function startOptionsFrom(options: QueueItem["options"]): StartDownloadOptions {
+function startOptionsFrom({ options, scheduledAt }: QueueItem): StartDownloadOptions {
   return {
+    scheduledAt: scheduledAt ?? undefined,
     sectionStart: options.section?.[0],
     sectionEnd: options.section?.[1],
     subLangs: options.subLangs ?? undefined,
     extraArgs: options.extraArgs ?? undefined,
     cookiesBrowser: options.cookiesBrowser ?? undefined,
     limitRate: options.limitRate ?? undefined,
+    nameTemplate: options.nameTemplate ?? undefined,
+    embedThumbnail: options.embedThumbnail || undefined,
+    embedChapters: options.embedChapters || undefined,
+    embedMetadata: options.embedMetadata || undefined,
+    sponsorblock: options.sponsorblock ?? undefined,
+    proxy: options.proxy ?? undefined,
   };
 }
 
@@ -113,12 +120,19 @@ export function syncQueue(items: QueueItem[]) {
         formatLabel: formatLabelFor(queued.format),
         format: queued.format,
         outputPath: queued.outputDir,
-        options: startOptionsFrom(queued.options),
+        options: startOptionsFrom(queued),
         phase: queued.status,
       })
     );
   }
   renderDownloads();
+}
+
+function queuedStatusLabel(item: DownloadItem): string {
+  const scheduledAt = item.options.scheduledAt;
+  if (!scheduledAt || scheduledAt * 1000 <= Date.now()) return UI_STRINGS.statusQueued;
+  const when = new Date(scheduledAt * 1000).toLocaleString(undefined, { dateStyle: "short", timeStyle: "short" });
+  return `${UI_STRINGS.statusScheduled} ${when}`;
 }
 
 function isPendingPhase(phase: DownloadItem["phase"]): phase is "queued" | "active" | "paused" {
@@ -382,7 +396,7 @@ function buildProgressRegion(item: DownloadItem): HTMLElement {
   track.setAttribute("aria-valuenow", String(Math.round(clamped)));
   pct.textContent = `${Math.round(clamped)}%`;
   statusText.textContent =
-    item.phase === "queued" ? UI_STRINGS.statusQueued : item.phase === "paused" ? UI_STRINGS.statusPaused : progressStatusLabel(clamped);
+    item.phase === "queued" ? queuedStatusLabel(item) : item.phase === "paused" ? UI_STRINGS.statusPaused : progressStatusLabel(clamped);
   const parts: string[] = [];
   if (item.phase === "active") {
     if (item.speed) parts.push(item.speed);

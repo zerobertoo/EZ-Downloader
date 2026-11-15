@@ -4,6 +4,7 @@ mod dependency_checker;
 mod download_manager;
 mod format_parser;
 mod history;
+mod output_template;
 mod paths;
 mod playlist;
 mod process_runner;
@@ -265,6 +266,7 @@ pub fn run() {
             );
             // Itens que ficaram em espera na sessão anterior voltam a andar.
             manager.pump(&handle);
+            manager.start_scheduler(&handle);
             app.manage(manager);
 
             let menu = build_menu(&handle)?;
@@ -314,6 +316,9 @@ pub fn run() {
             commands::set_max_concurrent,
             commands::set_download_path,
             commands::set_clipboard_monitor,
+        commands::save_preset,
+        commands::delete_preset,
+        commands::set_default_proxy,
             commands::get_playlist,
             commands::find_duplicates,
             commands::get_history,
