@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Relatar uma vulnerabilidade de segurança
+    url: https://github.com/zerobertoo/EZ-Downloader/security/advisories/new
+    about: Não abra uma issue pública. O relato privado só é visível para quem mantém o projeto.
+  - name: Dúvidas de uso
+    url: https://github.com/zerobertoo/EZ-Downloader#-como-usar
+    about: Veja o guia de uso no README antes de abrir uma issue.

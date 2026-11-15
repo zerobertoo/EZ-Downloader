@@ -145,7 +145,7 @@ Distribuído sob a licença [MIT](LICENSE).
 
 ## 🤝 Contribuições
 
-Issues e pull requests são bem-vindos!
+Issues e pull requests são bem-vindos! Para reportar um bug ou sugerir algo, use os [formulários de issue](https://github.com/zerobertoo/EZ-Downloader/issues/new/choose). O passo a passo para enviar código está em [CONTRIBUTING.md](CONTRIBUTING.md), e vulnerabilidades seguem a [política de segurança](SECURITY.md).
 
 ## 🔗 Créditos
 
