@@ -172,11 +172,7 @@ pub fn probe_media(ffmpeg: &str, path: &str) -> Result<MediaInfo, String> {
     Ok(parse_media_info(&output.stderr))
 }
 
-pub fn converted_path_for(input: &Path) -> PathBuf {
-    converted_path_in(input, None)
-}
-
-/// Igual a `converted_path_for`, mas grava em `output_dir` quando informado.
+/// Caminho livre para a cópia H.264: ao lado do original, ou em `output_dir` quando informado.
 pub fn converted_path_in(input: &Path, output_dir: Option<&Path>) -> PathBuf {
     let dir = output_dir
         .or_else(|| input.parent())
@@ -553,7 +549,7 @@ mod tests {
 
     #[test]
     fn converted_path_sits_next_to_original() {
-        let path = converted_path_for(Path::new("/nonexistent-dir/My Video.webm"));
+        let path = converted_path_in(Path::new("/nonexistent-dir/My Video.webm"), None);
         assert_eq!(path, PathBuf::from("/nonexistent-dir/My Video (H.264).mp4"));
     }
 
@@ -564,12 +560,6 @@ mod tests {
             Some(Path::new("/other-dir")),
         );
         assert_eq!(path, PathBuf::from("/other-dir/My Video (H.264).mp4"));
-    }
-
-    #[test]
-    fn converted_path_without_directory_matches_original_behaviour() {
-        let input = Path::new("/nonexistent-dir/My Video.webm");
-        assert_eq!(converted_path_in(input, None), converted_path_for(input));
     }
 
     #[test]

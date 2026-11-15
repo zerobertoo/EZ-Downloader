@@ -249,9 +249,8 @@ pub fn run() {
             let data_dir = handle
                 .path()
                 .app_data_dir()
-                .map(|dir| {
-                    std::fs::create_dir_all(&dir).ok();
-                    dir
+                .inspect(|dir| {
+                    std::fs::create_dir_all(dir).ok();
                 })
                 .unwrap_or_else(|_| std::path::PathBuf::from("."));
             app.manage(ConversionManager::new(ffmpeg_bin.clone()));
