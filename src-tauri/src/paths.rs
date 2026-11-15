@@ -68,3 +68,30 @@ pub fn get_qjs_bin(app: &AppHandle) -> String {
     }
     resource_bin_path(app, "qjs")
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn binary_name_adds_exe_only_on_windows() {
+        let name = binary_name("yt-dlp");
+        if cfg!(target_os = "windows") {
+            assert_eq!(name, "yt-dlp.exe");
+        } else {
+            assert_eq!(name, "yt-dlp");
+        }
+    }
+
+    #[test]
+    fn platform_dir_matches_the_resource_layout() {
+        let expected = if cfg!(target_os = "windows") {
+            "win32"
+        } else if cfg!(target_os = "macos") {
+            "darwin"
+        } else {
+            "linux"
+        };
+        assert_eq!(platform_dir(), expected);
+    }
+}

@@ -1374,4 +1374,85 @@ mod tests {
         assert_eq!(path, None);
         assert_eq!(error, Some("falha interna".to_string()));
     }
+
+    #[test]
+    fn cookies_browser_args_accepts_every_allowed_browser() {
+        for browser in ALLOWED_COOKIE_BROWSERS {
+            assert_eq!(
+                cookies_browser_args(browser).unwrap(),
+                vec!["--cookies-from-browser".to_string(), browser.to_string()]
+            );
+        }
+    }
+
+    #[test]
+    fn cookies_browser_args_rejects_unknown_browser_and_injection() {
+        assert!(cookies_browser_args("netscape").is_err());
+        assert!(cookies_browser_args("").is_err());
+        assert!(cookies_browser_args("chrome:/tmp/perfil").is_err());
+        assert!(cookies_browser_args("--exec").is_err());
+    }
+
+    #[test]
+    fn path_file_for_lives_in_temp_dir_and_is_unique_per_id() {
+        let first = path_file_for("abc");
+        let second = path_file_for("def");
+        assert_ne!(first, second);
+        assert_eq!(first.parent().unwrap(), std::env::temp_dir());
+        assert!(first.file_name().unwrap().to_string_lossy().contains("abc"));
+    }
+
+    #[test]
+    fn read_final_file_path_returns_last_non_empty_line() {
+        let file = std::env::temp_dir().join(format!(
+            "ez-test-final-path-multi-{}.path",
+            std::process::id()
+        ));
+        std::fs::write(&file, "C:\\a\\um.mp4\r\nC:\\a\\dois.mp4\r\n\r\n  \n").unwrap();
+        assert_eq!(
+            read_final_file_path(&file),
+            Some("C:\\a\\dois.mp4".to_string())
+        );
+        let _ = std::fs::remove_file(&file);
+    }
+
+    #[test]
+    fn read_final_file_path_is_none_for_missing_or_blank_file() {
+        let missing = std::env::temp_dir().join(format!(
+            "ez-test-final-path-missing-{}.path",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_file(&missing);
+        assert_eq!(read_final_file_path(&missing), None);
+
+        let blank = std::env::temp_dir().join(format!(
+            "ez-test-final-path-blank-{}.path",
+            std::process::id()
+        ));
+        std::fs::write(&blank, "\n  \n").unwrap();
+        assert_eq!(read_final_file_path(&blank), None);
+        let _ = std::fs::remove_file(&blank);
+    }
+
+    #[test]
+    fn read_final_file_path_tolerates_invalid_utf8() {
+        let file = std::env::temp_dir().join(format!(
+            "ez-test-final-path-utf8-{}.path",
+            std::process::id()
+        ));
+        std::fs::write(
+            &file,
+            [b'/', b't', b'm', b'p', b'/', 0xff, b'.', b'm', b'p', b'4'],
+        )
+        .unwrap();
+        let result = read_final_file_path(&file).unwrap();
+        assert!(result.starts_with("/tmp/"));
+        assert!(result.ends_with(".mp4"));
+        let _ = std::fs::remove_file(&file);
+    }
+
+    #[test]
+    fn unix_now_is_after_2024() {
+        assert!(unix_now() > 1_700_000_000);
+    }
 }
