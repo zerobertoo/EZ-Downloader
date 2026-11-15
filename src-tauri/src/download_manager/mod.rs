@@ -1,35 +1,30 @@
-use crate::format_parser::{classify_ytdlp_error, parse_formats, YtdlpInfo};
-use crate::history::{HistoryEntry, HistoryStore};
-use crate::playlist::{parse_playlist, PlaylistResult};
-use crate::process_runner::{ProcessHandle, ProcessOutput};
+use crate::history::HistoryStore;
+use crate::process_runner::ProcessHandle;
 pub use crate::queue::DownloadOptions;
 use crate::queue::{self, ItemStatus, QueueItem, QueueState};
-use crate::settings::{Preset, Settings, SettingsStore};
+use crate::settings::SettingsStore;
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
 use tauri::{AppHandle, Emitter};
-use tauri_plugin_notification::NotificationExt;
 use uuid::Uuid;
 
 mod args;
 mod events;
+mod probe;
 mod process;
+mod queue_ops;
+mod records;
+mod scheduler;
+mod settings;
+mod supervisor;
 
 use args::{
-    cookies_browser_args, is_unrecognized_remote_components_error, limit_rate_args, push_ejs_args,
-    quick_download_args, section_arg, sponsorblock_args, subtitles_args, validate_extra_args,
-    validate_proxy, without_remote_components,
+    cookies_browser_args, limit_rate_args, push_ejs_args, quick_download_args, section_arg,
+    sponsorblock_args, subtitles_args, validate_extra_args, validate_proxy,
 };
-use events::DownloadFinished;
 pub use events::FormatsResult;
-use process::{final_status, path_file_for, read_final_file_path, run_probe, spawn_attempt};
-
-const SCHEDULER_MAX_SLEEP_SECS: u64 = 30;
-const FORMATS_PROBE_TIMEOUT: Duration = Duration::from_secs(30);
-// Playlists grandes levam bem mais que um vídeo só pra listar.
-const PLAYLIST_PROBE_TIMEOUT: Duration = Duration::from_secs(120);
+use process::path_file_for;
 
 fn unix_now() -> i64 {
     std::time::SystemTime::now()
@@ -101,31 +96,6 @@ impl DownloadManager {
         *self.ytdlp_bin.lock().unwrap() = bin;
     }
 
-    pub fn get_available_formats(&self, url: &str) -> Result<FormatsResult, String> {
-        let mut args = vec!["--dump-json".to_string(), "--no-warnings".to_string()];
-        push_ejs_args(&mut args, self.qjs_bin.as_deref());
-        args.extend(self.default_proxy_args());
-        args.push(url.to_string());
-        let ytdlp_bin = self.current_ytdlp_bin();
-        let output = run_probe(&ytdlp_bin, &args, FORMATS_PROBE_TIMEOUT)?;
-
-        if output.code == 0 {
-            let info: YtdlpInfo = serde_json::from_str(&output.stdout)
-                .map_err(|e| format!("Erro ao processar formatos: {e}"))?;
-            let formats = parse_formats(&info);
-            Ok(FormatsResult {
-                formats,
-                title: info.title,
-                thumbnail: info.thumbnail,
-                uploader: info.uploader.or(info.channel),
-            })
-        } else {
-            let message = classify_ytdlp_error(&output.stderr);
-            log::warn!("Busca de formatos falhou para {url}: {message}");
-            Err(message)
-        }
-    }
-
     /// Valida e enfileira um download, retornando o id na hora. O processo só
     /// começa quando houver slot livre; o fim (sucesso, falha ou cancelamento)
     /// é sinalizado pelo evento "download-finished".
@@ -170,61 +140,6 @@ impl DownloadManager {
         }
         self.pump(app);
         Ok(id)
-    }
-
-    /// Proxy padrão das configurações. Um valor inválido (arquivo editado à mão)
-    /// é ignorado com aviso em vez de derrubar todos os downloads e buscas.
-    fn default_proxy_args(&self) -> Vec<String> {
-        let Some(proxy) = self.settings.get().default_proxy else {
-            return Vec::new();
-        };
-        match validate_proxy(&proxy) {
-            Ok(valid) => vec!["--proxy".to_string(), valid],
-            Err(error) => {
-                log::warn!("Proxy padrão ignorado: {error}");
-                Vec::new()
-            }
-        }
-    }
-
-    /// Thread única que dorme até o próximo horário agendado e promove o que
-    /// venceu. Acorda a cada 30 s para reavaliar: cobre itens agendados depois
-    /// do início, suspensão do computador e mudança do relógio.
-    pub fn start_scheduler(&self, app: &AppHandle) {
-        let manager = self.clone();
-        let app = app.clone();
-        std::thread::spawn(move || loop {
-            let now = unix_now();
-            let wait = manager
-                .queue
-                .lock()
-                .unwrap()
-                .next_schedule_after(now)
-                .map(|at| (at - now) as u64)
-                .unwrap_or(SCHEDULER_MAX_SLEEP_SECS)
-                .clamp(1, SCHEDULER_MAX_SLEEP_SECS);
-            std::thread::sleep(Duration::from_secs(wait));
-            manager.pump(&app);
-        });
-    }
-
-    /// Promove os itens da fila aos slots livres e inicia seus processos.
-    /// Só grava e emite quando algo foi promovido: quem muda a fila por
-    /// outro motivo já persiste por conta própria.
-    pub fn pump(&self, app: &AppHandle) {
-        let started = {
-            let mut queue = self.queue.lock().unwrap();
-            // Processos pausados que ainda estão morrendo seguem ocupando slot.
-            let dying = self.paused.lock().unwrap().clone();
-            let started = queue.promote(&dying, unix_now());
-            if !started.is_empty() {
-                self.persist_and_emit(app, &queue);
-            }
-            started
-        };
-        for item in started {
-            self.launch(app, item);
-        }
     }
 
     fn persist_and_emit(&self, app: &AppHandle, queue: &QueueState) {
@@ -322,367 +237,8 @@ impl DownloadManager {
         Ok(args)
     }
 
-    /// Inicia o processo de um item já promovido a ativo e deixa uma thread
-    /// supervisionando até o fim.
-    fn launch(&self, app: &AppHandle, item: QueueItem) {
-        let args = match self.build_download_args(&item) {
-            Ok(args) => args,
-            Err(error) => {
-                self.finish(app, &item, "failed", None, None, Some(error));
-                return;
-            }
-        };
-        let ytdlp_bin = self.current_ytdlp_bin();
-        log::info!(
-            "Iniciando download {}: url={} formato={} destino={}",
-            item.id,
-            item.url,
-            item.format,
-            item.output_dir
-        );
-        let (handle, join) = match spawn_attempt(app, &ytdlp_bin, &args, &item.id) {
-            Ok(pair) => pair,
-            Err(error) => {
-                self.finish(app, &item, "failed", None, None, Some(error));
-                return;
-            }
-        };
-        self.active
-            .lock()
-            .unwrap()
-            .insert(item.id.clone(), handle.clone());
-        // Pausa ou cancelamento podem ter chegado entre a promoção e o spawn,
-        // quando ainda não havia processo pra matar.
-        if self.paused.lock().unwrap().contains(&item.id)
-            || self.cancelled.lock().unwrap().contains(&item.id)
-        {
-            handle.kill();
-        }
-
-        let manager = self.clone();
-        let app = app.clone();
-        std::thread::spawn(move || manager.supervise(&app, item, args, ytdlp_bin, join));
-    }
-
-    /// Aguarda o fim do processo e decide o destino do item: volta pra fila
-    /// como pausado, ou termina (histórico + evento "download-finished").
-    fn supervise(
-        &self,
-        app: &AppHandle,
-        item: QueueItem,
-        args: Vec<String>,
-        ytdlp_bin: String,
-        join: std::thread::JoinHandle<Result<ProcessOutput, String>>,
-    ) {
-        let id = item.id.clone();
-        let output = join
-            .join()
-            .map_err(|_| "Erro interno ao aguardar processo".to_string())
-            .and_then(|r| r);
-        let stderr_text = output.as_ref().ok().map(|o| o.stderr.clone());
-
-        let was_cancelled = self.cancelled.lock().unwrap().remove(&id);
-        let (mut status, mut path, mut error) =
-            final_status(output, was_cancelled, &item.output_dir);
-
-        // Binário de yt-dlp desatualizado (auto-update falhou) não conhece
-        // --remote-components ainda: reexecuta sem a flag em vez de deixar
-        // todo download quebrar por causa de uma flag opcional.
-        if status == "failed"
-            && stderr_text
-                .as_deref()
-                .is_some_and(is_unrecognized_remote_components_error)
-        {
-            log::info!(
-                "Download {id}: binário de yt-dlp não suporta --remote-components, tentando sem EJS"
-            );
-            let retry_args = without_remote_components(&args);
-            match spawn_attempt(app, &ytdlp_bin, &retry_args, &id) {
-                Ok((handle, retry_join)) => {
-                    self.active.lock().unwrap().insert(id.clone(), handle);
-                    let retry_output = retry_join
-                        .join()
-                        .map_err(|_| "Erro interno ao aguardar processo".to_string())
-                        .and_then(|r| r);
-                    let retry_cancelled = self.cancelled.lock().unwrap().remove(&id);
-                    let (s, p, e) = final_status(retry_output, retry_cancelled, &item.output_dir);
-                    status = s;
-                    path = p;
-                    error = e;
-                }
-                Err(e) => log::error!("Falha ao tentar novamente sem --remote-components: {e}"),
-            }
-        }
-
-        self.active.lock().unwrap().remove(&id);
-        let path_file = path_file_for(&id);
-        let was_paused = self.paused.lock().unwrap().remove(&id);
-        // Se o processo já tinha concluído quando a pausa chegou, vale o
-        // resultado real; só um processo interrompido volta pra fila.
-        if was_paused && !was_cancelled && status != "done" {
-            let _ = std::fs::remove_file(&path_file);
-            log::info!("Download {id} pausado pelo usuário");
-            self.pump(app);
-            return;
-        }
-
-        let file_path = if status == "done" {
-            read_final_file_path(&path_file)
-        } else {
-            None
-        };
-        let _ = std::fs::remove_file(&path_file);
-        self.finish(app, &item, status, path, file_path, error);
-    }
-
-    /// Encerra um item: tira da fila, avisa o usuário, emite o evento, grava
-    /// no histórico e libera o slot pro próximo.
-    fn finish(
-        &self,
-        app: &AppHandle,
-        item: &QueueItem,
-        status: &'static str,
-        path: Option<String>,
-        file_path: Option<String>,
-        error: Option<String>,
-    ) {
-        {
-            let mut queue = self.queue.lock().unwrap();
-            queue.remove(&item.id);
-            self.persist_and_emit(app, &queue);
-        }
-        self.cancelled.lock().unwrap().remove(&item.id);
-        self.paused.lock().unwrap().remove(&item.id);
-
-        match status {
-            "done" => log::info!("Download {} concluído: {}", item.id, item.output_dir),
-            "cancelled" => log::info!("Download {} cancelado pelo usuário", item.id),
-            _ => log::error!(
-                "Download {} falhou: {}",
-                item.id,
-                error.as_deref().unwrap_or("erro desconhecido")
-            ),
-        }
-
-        // Downloads levam minutos — sem isso, quem troca de janela só
-        // descobre que terminou voltando pro app manualmente.
-        if status != "cancelled" {
-            let notif_title = if status == "done" {
-                "Download concluído"
-            } else {
-                "Download falhou"
-            };
-            let body = item.title.as_deref().unwrap_or(item.url.as_str());
-            let _ = app
-                .notification()
-                .builder()
-                .title(notif_title)
-                .body(body)
-                .show();
-        }
-
-        let _ = app.emit(
-            "download-finished",
-            DownloadFinished {
-                id: item.id.clone(),
-                status,
-                path,
-                file_path,
-                error: error.clone(),
-            },
-        );
-        self.history.append(HistoryEntry {
-            id: item.id.clone(),
-            url: item.url.clone(),
-            title: item.title.clone(),
-            format: item.format.clone(),
-            output_path: item.output_dir.clone(),
-            status: status.to_string(),
-            error,
-            finished_at: chrono::Utc::now().to_rfc3339(),
-        });
-        self.pump(app);
-    }
-
-    /// Cancela um item. Com processo rodando, só marca e mata: a remoção da
-    /// fila e o evento ficam com a thread que aguarda o processo (kill() é
-    /// assíncrono) e o slot só libera quando ele realmente morre. Item que
-    /// espera na fila ou está pausado não tem processo e termina na hora.
-    pub fn cancel_download(&self, app: &AppHandle, id: &str) {
-        let Some(status) = self.queue.lock().unwrap().status_of(id) else {
-            return;
-        };
-        // Pausado com processo ainda morrendo: quem encerra o item é a thread
-        // supervisora, senão ele terminaria duas vezes (cancelado e falho).
-        let has_process = status == ItemStatus::Active || self.paused.lock().unwrap().contains(id);
-        if has_process {
-            self.cancelled.lock().unwrap().insert(id.to_string());
-            log::info!("Cancelando download {id} a pedido do usuário");
-            let handle = self.active.lock().unwrap().get(id).cloned();
-            if let Some(handle) = handle {
-                handle.kill();
-            }
-        } else {
-            let removed = self.queue.lock().unwrap().remove(id);
-            if let Some(item) = removed {
-                self.finish(app, &item, "cancelled", None, None, None);
-            }
-        }
-    }
-
-    /// Pausa um item. Se havia processo, ele é morto e o item fica na fila
-    /// como pausado; retomar reexecuta o yt-dlp, que continua o `.part`.
-    pub fn pause_download(&self, app: &AppHandle, id: &str) {
-        // Cancelamento em curso vale mais que pausa: o item não pode voltar à fila.
-        if self.cancelled.lock().unwrap().contains(id) {
-            return;
-        }
-        let previous = {
-            let mut queue = self.queue.lock().unwrap();
-            let previous = queue.pause(id);
-            if previous == Some(ItemStatus::Active) {
-                self.paused.lock().unwrap().insert(id.to_string());
-            }
-            if previous.is_some() {
-                self.persist_and_emit(app, &queue);
-            }
-            previous
-        };
-        if previous == Some(ItemStatus::Active) {
-            let handle = self.active.lock().unwrap().get(id).cloned();
-            if let Some(handle) = handle {
-                handle.kill();
-            }
-        }
-    }
-
-    pub fn resume_download(&self, app: &AppHandle, id: &str) -> Result<(), String> {
-        // O processo antigo ainda está morrendo: retomar agora faria o launch
-        // novo enxergar a marca de pausa e matar o processo recém-criado.
-        if self.paused.lock().unwrap().contains(id) {
-            return Err("O download ainda está pausando, tente de novo em instantes".to_string());
-        }
-        let resumed = {
-            let mut queue = self.queue.lock().unwrap();
-            let resumed = queue.resume(id);
-            if resumed {
-                self.persist_and_emit(app, &queue);
-            }
-            resumed
-        };
-        if resumed {
-            self.pump(app);
-        }
-        Ok(())
-    }
-
-    pub fn reorder_download(&self, app: &AppHandle, id: &str, new_index: usize) {
-        let mut queue = self.queue.lock().unwrap();
-        if queue.reorder(id, new_index) {
-            self.persist_and_emit(app, &queue);
-        }
-    }
-
     pub fn queue_items(&self) -> Vec<QueueItem> {
         self.queue.lock().unwrap().items()
-    }
-
-    pub fn settings(&self) -> Settings {
-        self.settings.get()
-    }
-
-    pub fn set_max_concurrent(&self, app: &AppHandle, value: usize) -> Settings {
-        let settings = self.settings.set_max_concurrent(value);
-        self.queue
-            .lock()
-            .unwrap()
-            .set_max_concurrent(settings.max_concurrent);
-        // Aumentar o limite abre slots pra itens que já esperavam.
-        self.pump(app);
-        settings
-    }
-
-    pub fn set_download_path(&self, path: Option<String>) -> Settings {
-        self.settings.set_download_path(path)
-    }
-
-    pub fn save_preset(&self, preset: Preset) -> Result<Settings, String> {
-        self.settings.save_preset(preset)
-    }
-
-    pub fn delete_preset(&self, name: &str) -> Settings {
-        self.settings.delete_preset(name)
-    }
-
-    pub fn set_default_proxy(&self, proxy: Option<String>) -> Result<Settings, String> {
-        let proxy = match proxy
-            .map(|p| p.trim().to_string())
-            .filter(|p| !p.is_empty())
-        {
-            Some(value) => Some(validate_proxy(&value)?),
-            None => None,
-        };
-        Ok(self.settings.set_default_proxy(proxy))
-    }
-
-    pub fn set_clipboard_monitor(&self, enabled: bool) -> Settings {
-        self.settings.set_clipboard_monitor(enabled)
-    }
-
-    pub fn get_playlist(
-        &self,
-        url: &str,
-        cookies_browser: Option<&str>,
-    ) -> Result<PlaylistResult, String> {
-        let mut args = vec![
-            "--flat-playlist".to_string(),
-            "--dump-single-json".to_string(),
-            "--no-warnings".to_string(),
-        ];
-        push_ejs_args(&mut args, self.qjs_bin.as_deref());
-        if let Some(browser) = cookies_browser {
-            args.extend(cookies_browser_args(browser)?);
-        }
-        args.extend(self.default_proxy_args());
-        args.push(url.to_string());
-        let output = run_probe(&self.current_ytdlp_bin(), &args, PLAYLIST_PROBE_TIMEOUT)?;
-        if output.code == 0 {
-            parse_playlist(&output.stdout, url)
-        } else {
-            let message = classify_ytdlp_error(&output.stderr);
-            log::warn!("Busca da playlist falhou para {url}: {message}");
-            Err(message)
-        }
-    }
-
-    /// Posições das URLs que já estão na fila, já foram baixadas com sucesso ou
-    /// se repetem no próprio lote. Falhas e cancelamentos não contam: baixar
-    /// de novo é o esperado.
-    pub fn find_duplicates(&self, urls: &[String]) -> Vec<usize> {
-        let mut known: Vec<String> = self
-            .queue
-            .lock()
-            .unwrap()
-            .items()
-            .into_iter()
-            .map(|item| item.url)
-            .collect();
-        known.extend(
-            self.history
-                .entries()
-                .into_iter()
-                .filter(|entry| entry.status == "done")
-                .map(|entry| entry.url),
-        );
-        crate::url_tools::duplicate_positions(urls, &known)
-    }
-
-    pub fn history_entries(&self) -> Vec<HistoryEntry> {
-        self.history.entries()
-    }
-
-    pub fn clear_history(&self) {
-        self.history.clear();
     }
 }
 
