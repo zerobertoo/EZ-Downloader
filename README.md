@@ -73,7 +73,7 @@ Atalhos (Ctrl, ou Cmd no macOS): `L` foca o link, `M` alterna o modo, `H` abre o
 
 ### Pré-requisitos
 
-- **Node.js** 18+
+- **Node.js** 24.22.1+ (ou 26.12.1+). Versões anteriores têm a falha CVE-2026-111497 (Brotli) e o `npm install` recusa. Com `nvm`, `nvm use` já escolhe a versão certa pelo `.nvmrc`
 - **Rust** (via [rustup](https://rustup.rs/)), o backend é uma app Tauri
 - Dependências de sistema do Tauri no Linux (Ubuntu/Debian): `libwebkit2gtk-4.1-dev build-essential curl wget file libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev` (ver [pré-requisitos oficiais](https://tauri.app/start/prerequisites/) para Windows/macOS)
 - **yt-dlp** e **ffmpeg** no PATH (em produção são embutidos pelo build via `resources/bin/<platform>/`)
