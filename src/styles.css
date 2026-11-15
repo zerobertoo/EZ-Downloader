@@ -104,8 +104,8 @@
     to   { opacity: 1; transform: translateY(0); }
   }
   @keyframes dot-breathe {
-    0%, 100% { opacity: 1;    box-shadow: 0 0 8px var(--accent-glow); }
-    50%      { opacity: 0.55; box-shadow: 0 0 3px var(--accent-dim); }
+    0%, 100% { opacity: 1; }
+    50%      { opacity: 0.55; }
   }
   @keyframes orb-ring-pulse {
     0%, 100% { transform: scale(1);    opacity: 0.7; }
@@ -136,9 +136,15 @@
 
   button:not(:disabled) { cursor: pointer; }
 
-  button:focus-visible {
+  button:focus-visible,
+  summary:focus-visible,
+  input[type="checkbox"]:focus-visible {
     outline: 2px solid color-mix(in srgb, var(--accent) 60%, transparent);
     outline-offset: 2px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .card { animation: none; }
   }
 
   ::-webkit-scrollbar { width: 5px; }
@@ -207,7 +213,7 @@
 
   .btn-accent {
     @apply relative inline-flex items-center justify-center gap-2 overflow-hidden rounded-xl bg-accent font-bold whitespace-nowrap text-on-accent shadow-accent select-none;
-    transition: background 160ms var(--ease-app), box-shadow 160ms var(--ease-app), transform 160ms cubic-bezier(0.34, 1.56, 0.64, 1);
+    transition: background 160ms var(--ease-app), box-shadow 160ms var(--ease-app), transform 160ms cubic-bezier(0.25, 1, 0.5, 1);
     &::after {
       content: '';
       @apply pointer-events-none absolute inset-0 bg-linear-to-br from-white/15 to-transparent to-60%;
@@ -215,7 +221,7 @@
     &:hover:not(:disabled) { @apply -translate-y-px bg-accent-bright shadow-accent-hover; }
     &:active:not(:disabled) { @apply translate-y-0 scale-[0.98]; }
     &:disabled { @apply cursor-not-allowed opacity-45 shadow-none; }
-    &.is-confirming { background: color-mix(in srgb, var(--red) 85%, var(--accent)); box-shadow: 0 4px 20px var(--red-glow), 0 1px 0 rgba(255,255,255,0.15) inset; }
+    &.is-confirming { background: color-mix(in srgb, var(--red) 85%, var(--accent)); box-shadow: 0 1px 0 rgba(255,255,255,0.15) inset; }
     &.is-confirming:hover:not(:disabled) { @apply bg-red; }
   }
 

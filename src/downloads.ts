@@ -412,11 +412,11 @@ const BANNER_BTN = "btn-accent h-[34px] gap-[7px] rounded-lg px-3.5 text-xs trac
 const OUTCOME_CLASS: Record<"done" | "failed" | "cancelled", { banner: string; icon: string }> = {
   done: {
     banner: "border-green/20 bg-green-dim",
-    icon: "border-green/30 bg-green-dim text-green shadow-[0_0_16px_rgba(52,211,153,0.28)]",
+    icon: "border-green/30 bg-green-dim text-green",
   },
   failed: {
     banner: "border-red/20 bg-red-dim",
-    icon: "border-red/30 bg-red-dim text-red shadow-[0_0_16px_rgba(248,113,113,0.28)]",
+    icon: "border-red/30 bg-red-dim text-red",
   },
   cancelled: {
     banner: "border-line bg-surface-2",
@@ -491,7 +491,7 @@ function buildOutcomeBanner(item: DownloadItem): HTMLElement {
    ════════════════════════════════════════════════════════════════ */
 
 const PROGRESS_FILL_CLASS =
-  "relative h-full w-0 rounded-full bg-linear-to-r from-accent to-accent-bright shadow-[0_0_10px_color-mix(in_srgb,var(--accent)_50%,transparent)] transition-[width] duration-[450ms] ease-app after:absolute after:top-0 after:right-0 after:h-full after:w-[50px] after:animate-shimmer after:rounded-full after:bg-linear-to-r after:from-transparent after:to-white/40 after:content-[''] motion-reduce:after:hidden";
+  "relative h-full w-0 rounded-full bg-linear-to-r from-accent to-accent-bright transition-[width] duration-[450ms] ease-app after:absolute after:top-0 after:right-0 after:h-full after:w-[50px] after:animate-shimmer after:rounded-full after:bg-linear-to-r after:from-transparent after:to-white/40 after:content-[''] motion-reduce:after:hidden";
 
 const conversionRefs = new Map<string, { fill: HTMLElement; track: HTMLElement; pct: HTMLElement }>();
 
