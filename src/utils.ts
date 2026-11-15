@@ -76,6 +76,7 @@ export function urlHintFor(value: string, mode: "basic" | "advanced"): string | 
 const ERROR_PATTERNS: [RegExp, string][] = [
   [/private video/i, "Este vídeo é privado e não pode ser baixado."],
   [/video (is )?unavailable|has been removed/i, "Vídeo indisponível: pode ter sido removido ou não existir mais."],
+  [/not a bot/i, "O YouTube pediu confirmação de que você não é um robô. Em Ajustes, escolha o navegador em “Entrar com o navegador” e tente de novo."],
   [/sign in to confirm your age|age[- ]restrict/i, "Vídeo com restrição de idade: exige login para baixar."],
   [/not available in your country|geo.?restrict/i, "Vídeo bloqueado nesta região."],
   [/429|too many requests/i, "Muitas requisições ao serviço. Espere um pouco e tente de novo."],

@@ -14,7 +14,7 @@ import { toast } from "./components/toast";
 import { attachTooltip } from "./components/tooltip";
 import { bindDownloadDeps, handleDownload, handleQuickDownload, openAdvancedPlaylistSelection, urlValue } from "./download";
 import { currentMode, setMode, type AppMode } from "./mode";
-import { prefs, type QuickFormat } from "./prefs";
+import { BROWSERS, prefs, type QuickFormat } from "./prefs";
 import { UI_STRINGS, state, type Phase } from "./state";
 import { THEMES, currentThemeId, setTheme } from "./theme";
 import { errorMessage, formatFileSize, isValidUrl, looksLikePlaylist, urlHintFor } from "./utils";
@@ -429,13 +429,26 @@ function buildSettings(concurrency: ReturnType<typeof select>): SettingsView {
   const technical = switchControl({ label: "Detalhes técnicos abertos", hint: "Mostra o comando e o log do yt-dlp em cada item da prateleira.", checked: prefs.technicalOpen, onChange: (on) => (prefs.technicalOpen = on) });
   refs.clipboardSwitch = clipboard.input;
 
+  const cookies = select({
+    label: "Entrar com o navegador",
+    value: prefs.cookiesBrowser,
+    options: [{ value: "", label: "Nenhum" }, ...BROWSERS.map((name) => ({ value: name, label: name.charAt(0).toUpperCase() + name.slice(1) }))],
+    onChange: (value) => (prefs.cookiesBrowser = value),
+  });
+  const cookiesField = field({
+    label: "Entrar com o navegador",
+    controlId: cookies.element.id,
+    control: cookies.element,
+    hint: "Use se o YouTube pedir para confirmar que você não é um robô. Precisa estar logado nesse navegador, e ele fechado durante o download.",
+  });
+
   const section = (title: string, ...children: HTMLElement[]) => h("div", { class: "settings__section" }, h("h3", { class: "settings__title" }, title), ...children);
 
   const element = h(
     "div",
     { class: "settings" },
     section("Aparência", swatches),
-    section("Baixar", paste.element, optimize.element, clipboard.element),
+    section("Baixar", paste.element, optimize.element, clipboard.element, cookiesField.element),
     section("Fila", field({ label: "Downloads simultâneos", controlId: concurrency.element.id, control: concurrency.element, hint: `Atalho: ${shortcutLabel("J")}` }).element),
     section("Diagnóstico", technical.element, h("p", { class: "field__note" }, "O comando e o log de cada download ficam em “Detalhes técnicos”, dentro do item.")),
     h("div", { class: "settings__section" }, version)

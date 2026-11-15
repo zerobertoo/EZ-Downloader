@@ -195,7 +195,7 @@ export async function handleQuickDownload() {
     formatLabel: isMp3 ? "MP3" : "MP4",
     title: entry.title,
     outputPath,
-    options: {},
+    options: prefs.cookiesBrowser ? { cookiesBrowser: prefs.cookiesBrowser } : {},
   });
 
   quickSubmitting = true;

@@ -6,6 +6,7 @@ import { h } from "../components/dom";
 import { field, textInput } from "../components/field";
 import { select } from "../components/select";
 import { toast } from "../components/toast";
+import { BROWSERS } from "../prefs";
 import { UI_STRINGS } from "../state";
 import { errorMessage } from "../utils";
 
@@ -14,7 +15,6 @@ const TIME_PATTERN = /^\d{1,2}:\d{2}(:\d{2})?$/;
 /** Número com sufixo de unidade opcional, a mesma sintaxe do --limit-rate do yt-dlp. */
 const RATE_PATTERN = /^\d+(\.\d+)?[KMG]?$/i;
 
-const BROWSERS = ["chrome", "firefox", "edge", "brave", "opera", "vivaldi", "chromium", "safari"];
 
 const group = (title: string, ...children: (Node | null)[]) =>
   h("div", { class: "adv__group" }, h("h3", { class: "adv__title" }, title), ...children);

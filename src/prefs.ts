@@ -2,7 +2,10 @@ import { safeStorageGet, safeStorageSet } from "./components/dom";
 
 export type QuickFormat = "mp4" | "mp3";
 
+export const BROWSERS = ["chrome", "firefox", "edge", "brave", "opera", "vivaldi", "chromium", "safari"];
+
 const KEYS = {
+  cookiesBrowser: "ez-cookies-browser",
   quickFormat: "ez-quick-format",
   pasteToDownload: "ez-paste-to-download",
   autoOptimize: "ez-auto-optimize",
@@ -18,6 +21,13 @@ function writeFlag(key: string, value: boolean) {
 }
 
 export const prefs = {
+  get cookiesBrowser(): string {
+    const stored = safeStorageGet(KEYS.cookiesBrowser) ?? "";
+    return BROWSERS.includes(stored) ? stored : "";
+  },
+  set cookiesBrowser(value: string) {
+    safeStorageSet(KEYS.cookiesBrowser, value);
+  },
   get quickFormat(): QuickFormat {
     return safeStorageGet(KEYS.quickFormat) === "mp3" ? "mp3" : "mp4";
   },
