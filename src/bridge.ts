@@ -76,6 +76,28 @@ export interface StartDownloadOptions {
   limitRate?: string;
 }
 
+/** Item pendente da fila persistida no backend (terminados vão para o histórico). */
+export interface QueueItem {
+  id: string;
+  url: string;
+  format: string;
+  title: string | null;
+  outputDir: string;
+  options: {
+    section: [string, string] | null;
+    subLangs: string | null;
+    extraArgs: string | null;
+    cookiesBrowser: string | null;
+    limitRate: string | null;
+  };
+  status: "queued" | "active" | "paused";
+}
+
+export interface Settings {
+  maxConcurrent: number;
+  downloadPath: string | null;
+}
+
 export interface DebugCommand {
   id: string;
   command: string;
@@ -133,6 +155,23 @@ export const bridge = {
   openPath: (path: string): Promise<void> => invoke("open_path", { path }),
 
   cancelDownload: (id: string): Promise<void> => invoke("cancel_download", { id }),
+
+  pauseDownload: (id: string): Promise<void> => invoke("pause_download", { id }),
+
+  resumeDownload: (id: string): Promise<void> => invoke("resume_download", { id }),
+
+  reorderDownload: (id: string, newIndex: number): Promise<void> => invoke("reorder_download", { id, newIndex }),
+
+  getQueue: (): Promise<QueueItem[]> => invoke("get_queue"),
+
+  getSettings: (): Promise<Settings> => invoke("get_settings"),
+
+  setMaxConcurrent: (value: number): Promise<Settings> => invoke("set_max_concurrent", { value }),
+
+  setDownloadPath: (path: string | null): Promise<Settings> => invoke("set_download_path", { path }),
+
+  onQueueChanged: (callback: (items: QueueItem[]) => void): Promise<UnlistenFn> =>
+    listen<QueueItem[]>("queue-changed", (event) => callback(event.payload)),
 
   getHistory: (): Promise<HistoryEntry[]> =>
     invoke<

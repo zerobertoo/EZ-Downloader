@@ -1,6 +1,8 @@
 use crate::convert::{ConversionManager, MediaReport};
 use crate::download_manager::{DownloadManager, DownloadOptions, FormatsResult};
 use crate::history::HistoryEntry;
+use crate::queue::QueueItem;
+use crate::settings::Settings;
 use serde::Serialize;
 use tauri::{AppHandle, Manager, State};
 use tauri_plugin_dialog::DialogExt;
@@ -79,8 +81,56 @@ pub fn start_download(
 }
 
 #[tauri::command]
-pub fn cancel_download(manager: State<DownloadManager>, id: String) {
-    manager.cancel_download(&id);
+pub fn cancel_download(app: AppHandle, manager: State<DownloadManager>, id: String) {
+    manager.cancel_download(&app, &id);
+}
+
+#[tauri::command]
+pub fn pause_download(app: AppHandle, manager: State<DownloadManager>, id: String) {
+    manager.pause_download(&app, &id);
+}
+
+#[tauri::command]
+pub fn resume_download(
+    app: AppHandle,
+    manager: State<DownloadManager>,
+    id: String,
+) -> Result<(), String> {
+    manager.resume_download(&app, &id)
+}
+
+#[tauri::command]
+pub fn reorder_download(
+    app: AppHandle,
+    manager: State<DownloadManager>,
+    id: String,
+    new_index: usize,
+) {
+    manager.reorder_download(&app, &id, new_index);
+}
+
+#[tauri::command]
+pub fn get_queue(manager: State<DownloadManager>) -> Vec<QueueItem> {
+    manager.queue_items()
+}
+
+#[tauri::command]
+pub fn get_settings(manager: State<DownloadManager>) -> Settings {
+    manager.settings()
+}
+
+#[tauri::command]
+pub fn set_max_concurrent(
+    app: AppHandle,
+    manager: State<DownloadManager>,
+    value: usize,
+) -> Settings {
+    manager.set_max_concurrent(&app, value)
+}
+
+#[tauri::command]
+pub fn set_download_path(manager: State<DownloadManager>, path: Option<String>) -> Settings {
+    manager.set_download_path(path)
 }
 
 #[tauri::command]

@@ -1,5 +1,5 @@
 import { bridge } from "../bridge";
-import { PATH_STORAGE_KEY, UI_STRINGS, elements, state } from "../state";
+import { UI_STRINGS, elements, state } from "../state";
 import { clearFieldError, setFieldError } from "./feedback";
 
 /* ════════════════════════════════════════════════════════════════
@@ -11,7 +11,7 @@ export async function handleSelectPath() {
     const path = await bridge.selectDownloadPath();
     if (path) {
       state.downloadPath = path;
-      localStorage.setItem(PATH_STORAGE_KEY, path);
+      await bridge.setDownloadPath(path);
       updateDownloadPathDisplay();
       clearFieldError(elements.pathError);
     }

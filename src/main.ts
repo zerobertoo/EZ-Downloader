@@ -8,6 +8,7 @@ import {
   handleConversionFinished,
   handleDownloadFinished,
   initDownloadsUI,
+  syncQueue,
   updateConversionProgress,
   updateDownloadProgress,
 } from "./downloads";
@@ -85,15 +86,22 @@ document.addEventListener("DOMContentLoaded", async () => {
     const version = await bridge.getVersion();
     if (elements.version) elements.version.textContent = `v${version}`;
 
-    // A pasta escolhida manualmente sobrevive entre sessões; sem escolha
-    // prévia, cai no diretório Downloads do SO.
-    const savedPath = localStorage.getItem(PATH_STORAGE_KEY);
-    const downloadsPath = savedPath || (await bridge.getDownloadsPath());
+    // A pasta escolhida manualmente sobrevive entre sessões (guardada no
+    // backend); sem escolha prévia, cai no diretório Downloads do SO.
+    let settings = await bridge.getSettings();
+    const legacyPath = localStorage.getItem(PATH_STORAGE_KEY);
+    if (legacyPath) {
+      // Migração única: versões antigas guardavam a pasta no localStorage.
+      if (!settings.downloadPath) settings = await bridge.setDownloadPath(legacyPath);
+      localStorage.removeItem(PATH_STORAGE_KEY);
+    }
+    const downloadsPath = settings.downloadPath || (await bridge.getDownloadsPath());
     if (downloadsPath) {
       state.downloadPath = downloadsPath;
       updateDownloadPathDisplay();
     }
 
+    await bridge.onQueueChanged((items) => syncQueue(items));
     await bridge.onDownloadProgress((progress) => updateDownloadProgress(progress));
     await bridge.onDownloadFinished((finished) => handleDownloadFinished(finished));
     await bridge.onConversionProgress((progress) => updateConversionProgress(progress));
@@ -101,6 +109,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     await bridge.onDebugCommand((command) => showDebugCommand(command.id, command.command));
     await bridge.onDebugLine((line) => appendDebugLine(line));
 
+    syncQueue(await bridge.getQueue());
     await loadHistory();
   } catch (error) {
     console.error("Erro ao inicializar:", error);

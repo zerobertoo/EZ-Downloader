@@ -6,6 +6,8 @@ mod format_parser;
 mod history;
 mod paths;
 mod process_runner;
+mod queue;
+mod settings;
 mod ytdlp_updater;
 
 use convert::ConversionManager;
@@ -240,23 +242,26 @@ pub fn run() {
                 .path()
                 .download_dir()
                 .unwrap_or_else(|_| std::path::PathBuf::from("."));
-            // Histórico persistente no diretório de dados do app.
-            let history_path = handle
+            let data_dir = handle
                 .path()
                 .app_data_dir()
                 .map(|dir| {
                     std::fs::create_dir_all(&dir).ok();
-                    dir.join("history.json")
+                    dir
                 })
-                .unwrap_or_else(|_| std::path::PathBuf::from("history.json"));
+                .unwrap_or_else(|_| std::path::PathBuf::from("."));
             app.manage(ConversionManager::new(ffmpeg_bin.clone()));
             let manager = DownloadManager::new(
                 ytdlp_bin,
                 Some(ffmpeg_bin),
                 qjs_bin,
                 default_download_path,
-                history_path,
+                data_dir.join("history.json"),
+                data_dir.join("queue.json"),
+                data_dir.join("settings.json"),
             );
+            // Itens que ficaram em espera na sessão anterior voltam a andar.
+            manager.pump(&handle);
             app.manage(manager);
 
             let menu = build_menu(&handle)?;
@@ -298,6 +303,13 @@ pub fn run() {
             commands::get_formats,
             commands::start_download,
             commands::cancel_download,
+            commands::pause_download,
+            commands::resume_download,
+            commands::reorder_download,
+            commands::get_queue,
+            commands::get_settings,
+            commands::set_max_concurrent,
+            commands::set_download_path,
             commands::get_history,
             commands::clear_history,
             commands::select_download_path,

@@ -25,6 +25,10 @@ export const UI_STRINGS = {
   statusDone: "Concluído",
   statusFailed: "Falhou",
   statusCancelled: "Cancelado",
+  statusQueued: "Na fila",
+  statusPaused: "Pausado",
+  downloadPause: "Pausar",
+  downloadResume: "Retomar",
   historyTitle: "Histórico",
   historyEmpty: "Nenhum download ainda",
   historyNoResults: "Nenhum resultado para a busca",
@@ -73,7 +77,7 @@ export interface DownloadItem {
   format: string;
   outputPath: string;
   options: StartDownloadOptions;
-  phase: "active" | "done" | "failed" | "cancelled";
+  phase: "queued" | "active" | "paused" | "done" | "failed" | "cancelled";
   percent: number;
   speed: string | null;
   eta: string | null;

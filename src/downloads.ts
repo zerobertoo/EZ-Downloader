@@ -5,6 +5,7 @@ import {
   type DownloadFinished,
   type DownloadProgress,
   type MediaReport,
+  type QueueItem,
   type StartDownloadOptions,
 } from "./bridge";
 import { UI_STRINGS, elements, state, type ConversionState, type DownloadItem } from "./state";
@@ -32,19 +33,9 @@ interface EnqueueParams {
   options: StartDownloadOptions;
 }
 
-/** Dispara um download em background e adiciona o card na fila. Propaga erro síncrono do backend (ex: limite atingido). */
-export async function enqueueDownload(params: EnqueueParams): Promise<void> {
-  const id = await bridge.startDownload(params.url, params.format, params.outputPath, params.title ?? undefined, params.options);
-
-  const item: DownloadItem = {
-    id,
-    url: params.url,
-    title: params.title,
-    formatLabel: params.formatLabel,
-    format: params.format,
-    outputPath: params.outputPath,
-    options: params.options,
-    phase: "active",
+function newDownloadItem(fields: Pick<DownloadItem, "id" | "url" | "title" | "formatLabel" | "format" | "outputPath" | "options" | "phase">): DownloadItem {
+  return {
+    ...fields,
     percent: 0,
     speed: null,
     eta: null,
@@ -53,9 +44,85 @@ export async function enqueueDownload(params: EnqueueParams): Promise<void> {
     filePath: null,
     conversion: null,
   };
-  state.downloads.set(id, item);
+}
+
+/** Propaga erro síncrono do backend (ex: opção inválida). */
+export async function enqueueDownload(params: EnqueueParams): Promise<void> {
+  const id = await bridge.startDownload(params.url, params.format, params.outputPath, params.title ?? undefined, params.options);
+
+  // O evento "queue-changed" é emitido antes do comando retornar, então o card
+  // pode já ter sido criado por syncQueue sem o rótulo de formato.
+  const existing = state.downloads.get(id);
+  if (existing) {
+    existing.formatLabel = params.formatLabel;
+    existing.options = params.options;
+    // renderKey não inclui o rótulo, então força a recriação do card.
+    renderedCards.get(id)?.el.remove();
+    renderedCards.delete(id);
+  } else {
+    state.downloads.set(
+      id,
+      newDownloadItem({
+        id,
+        url: params.url,
+        title: params.title,
+        formatLabel: params.formatLabel,
+        format: params.format,
+        outputPath: params.outputPath,
+        options: params.options,
+        phase: "queued",
+      })
+    );
+  }
   setDebugDownload(id);
   renderDownloads();
+}
+
+function formatLabelFor(format: string): string {
+  if (format === "quick-mp3") return "MP3";
+  if (format === "quick-mp4" || format === "best") return "MP4";
+  return format;
+}
+
+function startOptionsFrom(options: QueueItem["options"]): StartDownloadOptions {
+  return {
+    sectionStart: options.section?.[0],
+    sectionEnd: options.section?.[1],
+    subLangs: options.subLangs ?? undefined,
+    extraArgs: options.extraArgs ?? undefined,
+    cookiesBrowser: options.cookiesBrowser ?? undefined,
+    limitRate: options.limitRate ?? undefined,
+  };
+}
+
+/** Espelha a fila do backend (fonte da verdade): cria cards de itens restaurados e atualiza o estado dos conhecidos. */
+export function syncQueue(items: QueueItem[]) {
+  for (const queued of items) {
+    if (dismissedIds.has(queued.id)) continue;
+    const existing = state.downloads.get(queued.id);
+    if (existing) {
+      if (isPendingPhase(existing.phase)) existing.phase = queued.status;
+      continue;
+    }
+    state.downloads.set(
+      queued.id,
+      newDownloadItem({
+        id: queued.id,
+        url: queued.url,
+        title: queued.title,
+        formatLabel: formatLabelFor(queued.format),
+        format: queued.format,
+        outputPath: queued.outputDir,
+        options: startOptionsFrom(queued.options),
+        phase: queued.status,
+      })
+    );
+  }
+  renderDownloads();
+}
+
+function isPendingPhase(phase: DownloadItem["phase"]): phase is "queued" | "active" | "paused" {
+  return phase === "queued" || phase === "active" || phase === "paused";
 }
 
 export function initDownloadsUI() {
@@ -66,6 +133,8 @@ export function initDownloadsUI() {
     if (!id) return;
 
     if (target.closest(".js-cancel")) void handleCancel(id);
+    else if (target.closest(".js-pause")) void handleQueueAction(() => bridge.pauseDownload(id));
+    else if (target.closest(".js-resume")) void handleQueueAction(() => bridge.resumeDownload(id));
     else if (target.closest(".js-retry")) void handleRetry(id);
     else if (target.closest(".js-open-folder")) void handleOpenFolder(id);
     else if (target.closest(".js-remove")) handleRemove(id);
@@ -83,8 +152,17 @@ async function handleCancel(id: string) {
   }
 }
 
+async function handleQueueAction(action: () => Promise<void>) {
+  try {
+    await action();
+  } catch (error) {
+    console.error("Erro ao alterar a fila:", error);
+    setFieldError(elements.urlError, errorMessage(error));
+  }
+}
+
 /** Só remove o card antigo depois do reenvio dar certo — senão um erro síncrono
- * (ex: limite de downloads simultâneos) faz o download sumir sem feedback. */
+ * (ex: opção inválida) faz o download sumir sem feedback. */
 async function handleRetry(id: string) {
   const item = state.downloads.get(id);
   if (!item) return;
@@ -115,8 +193,12 @@ async function handleOpenFolder(id: string) {
   }
 }
 
+/** Cards removidos pelo usuário: um queue-changed atrasado não pode recriá-los. */
+const dismissedIds = new Set<string>();
+
 function handleRemove(id: string) {
   if (state.downloads.get(id)?.conversion?.phase === "running") void bridge.cancelConversion(id);
+  dismissedIds.add(id);
   state.downloads.delete(id);
   progressRefs.delete(id);
   renderDownloads();
@@ -124,7 +206,7 @@ function handleRemove(id: string) {
 
 export function updateDownloadProgress(progress: DownloadProgress) {
   const item = state.downloads.get(progress.id);
-  if (!item) return;
+  if (!item || item.phase !== "active") return;
 
   item.percent = progress.percent;
   item.speed = progress.speed;
@@ -223,7 +305,7 @@ function buildCard(item: DownloadItem): HTMLElement {
   badge.textContent = item.formatLabel;
   head.appendChild(badge);
 
-  if (item.phase !== "active") {
+  if (!isPendingPhase(item.phase)) {
     const remove = document.createElement("button");
     remove.className = "js-remove flex size-[22px] shrink-0 items-center justify-center rounded-full text-fg-3 transition-colors duration-150 hover:bg-surface-3 hover:text-fg pointer-coarse:size-11";
     remove.setAttribute("aria-label", UI_STRINGS.downloadRemove);
@@ -233,7 +315,7 @@ function buildCard(item: DownloadItem): HTMLElement {
 
   card.appendChild(head);
 
-  if (item.phase === "active") {
+  if (isPendingPhase(item.phase)) {
     card.appendChild(buildProgressRegion(item));
   } else {
     card.appendChild(buildOutcomeBanner(item));
@@ -251,7 +333,7 @@ function buildProgressRegion(item: DownloadItem): HTMLElement {
   header.className = "flex items-center gap-4";
   header.innerHTML = `
     <div class="relative flex size-[50px] shrink-0 items-center justify-center" aria-hidden="true">
-      <div class="absolute inset-0 animate-ring rounded-full border-[1.5px] border-accent/20 motion-reduce:animate-none motion-reduce:opacity-50"></div>
+      <div class="absolute inset-0 ${item.phase === "active" ? "animate-ring" : ""} rounded-full border-[1.5px] border-accent/20 motion-reduce:animate-none motion-reduce:opacity-50"></div>
       <div class="absolute inset-[7px] flex items-center justify-center rounded-full border border-accent/30 bg-accent-dim text-accent">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
           <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
@@ -278,10 +360,17 @@ function buildProgressRegion(item: DownloadItem): HTMLElement {
   track.appendChild(fill);
   region.appendChild(track);
 
+  const actions = document.createElement("div");
+  actions.className = "flex items-center gap-2";
+  const toggleBtn = document.createElement("button");
+  const isPaused = item.phase === "paused";
+  toggleBtn.className = `${isPaused ? "js-resume" : "js-pause"} btn-ghost h-[34px] px-[15px] text-xs font-medium pointer-coarse:min-h-11`;
+  toggleBtn.textContent = isPaused ? UI_STRINGS.downloadResume : UI_STRINGS.downloadPause;
   const cancelBtn = document.createElement("button");
-  cancelBtn.className = "js-cancel btn-ghost h-[34px] self-start px-[15px] text-xs font-medium pointer-coarse:min-h-11";
+  cancelBtn.className = "js-cancel btn-ghost h-[34px] px-[15px] text-xs font-medium pointer-coarse:min-h-11";
   cancelBtn.textContent = "Cancelar";
-  region.appendChild(cancelBtn);
+  actions.append(toggleBtn, cancelBtn);
+  region.appendChild(actions);
 
   const statusText = header.querySelector(".progress-status-text") as HTMLElement;
   const statsText = header.querySelector(".progress-stats-text") as HTMLElement;
@@ -292,10 +381,13 @@ function buildProgressRegion(item: DownloadItem): HTMLElement {
   fill.style.width = `${clamped}%`;
   track.setAttribute("aria-valuenow", String(Math.round(clamped)));
   pct.textContent = `${Math.round(clamped)}%`;
-  statusText.textContent = progressStatusLabel(clamped);
+  statusText.textContent =
+    item.phase === "queued" ? UI_STRINGS.statusQueued : item.phase === "paused" ? UI_STRINGS.statusPaused : progressStatusLabel(clamped);
   const parts: string[] = [];
-  if (item.speed) parts.push(item.speed);
-  if (item.eta) parts.push(`ETA ${item.eta}`);
+  if (item.phase === "active") {
+    if (item.speed) parts.push(item.speed);
+    if (item.eta) parts.push(`ETA ${item.eta}`);
+  }
   statsText.textContent = parts.join(" • ");
 
   return region;
