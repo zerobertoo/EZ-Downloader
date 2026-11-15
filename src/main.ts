@@ -1,128 +1,72 @@
+import "./styles.css";
 import { bridge } from "./bridge";
-import { initMode, currentMode } from "./mode";
+import { buildApp, render, showDownloadPath } from "./app";
+import { toast } from "./components/toast";
+import { PATH_STORAGE_KEY, UI_STRINGS, state } from "./state";
+import { safeStorageGet, safeStorageRemove } from "./components/dom";
+import { initMode } from "./mode";
 import { initShortcuts } from "./shortcuts";
 import { initTheme } from "./theme";
-import { PATH_STORAGE_KEY, UI_STRINGS, elements, state } from "./state";
-import { renderPlaylistHint, toggle } from "./utils";
-import { handleDownload, handleQuickDownload } from "./download";
-import {
-  handleConversionFinished,
-  handleDownloadFinished,
-  initDownloadsUI,
-  syncQueue,
-  updateConversionProgress,
-  updateDownloadProgress,
-} from "./downloads";
-import { appendDebugLine, showDebugCommand, toggleNerdMode } from "./ui/debug";
+import { handleConversionFinished, handleDebugCommand, handleDebugLine, handleDownloadFinished, initDownloadsUI, syncQueue, updateConversionProgress, updateDownloadProgress } from "./downloads";
 import { initClipboardUI } from "./ui/clipboard";
-import { handleSelectPath, updateDownloadPathDisplay } from "./ui/destination";
-import { clearFieldError, setFieldError } from "./ui/feedback";
-import { handleFetchFormats, handleFormatChange } from "./ui/formats";
 import { initHistoryUI, loadHistory } from "./ui/history";
-import { handleToggleMode, renderModeLabel, setQuickFormat } from "./ui/mode-controls";
-import { render } from "./ui/render";
-import { initConcurrencyUI } from "./ui/concurrency";
-import { initPresetsUI } from "./ui/presets";
-import { closeSelection, initSelectionUI } from "./ui/selection";
-import { closeThemePopover, toggleThemePopover } from "./ui/theme-popover";
+import { refs } from "./ui/refs";
+import { initSelectionUI, closeSelection } from "./ui/selection";
 
 initTheme();
 initMode();
 
-document.addEventListener("DOMContentLoaded", async () => {
-  elements.fetchFormatsBtn?.addEventListener("click", handleFetchFormats);
-  elements.formatSelect?.addEventListener("change", handleFormatChange);
-  elements.downloadBtn?.addEventListener("click", handleDownload);
-  elements.selectPathBtn?.addEventListener("click", handleSelectPath);
-  elements.themeToggleBtn?.addEventListener("click", (e) => {
-    e.stopPropagation();
-    toggleThemePopover();
-  });
-
-  elements.modeToggleBtn?.addEventListener("click", handleToggleMode);
-  elements.quickMp4Btn?.addEventListener("click", () => setQuickFormat("mp4"));
-  elements.quickMp3Btn?.addEventListener("click", () => setQuickFormat("mp3"));
-  elements.quickDownloadBtn?.addEventListener("click", handleQuickDownload);
-  elements.subLangsCheckbox?.addEventListener("change", () => {
-    toggle(elements.subLangsInput, elements.subLangsCheckbox?.checked ?? false);
-  });
-  elements.nerdModeBtn?.addEventListener("click", toggleNerdMode);
-  renderModeLabel();
-  initDownloadsUI();
+async function start() {
+  const root = document.getElementById("app");
+  if (!root) return;
+  const { advanced } = buildApp(root);
   initHistoryUI();
   initSelectionUI();
+  initDownloadsUI();
   initShortcuts();
-  document.addEventListener("click", (e) => {
-    const popover = elements.themePopover;
-    if (popover && !popover.classList.contains("hidden") && !popover.contains(e.target as Node) && e.target !== elements.themeToggleBtn) {
-      closeThemePopover();
-    }
-  });
-
-  document.addEventListener("keydown", (e) => {
-    if (e.key !== "Escape" || e.isComposing) return;
-    const popover = elements.themePopover;
-    if (popover && !popover.classList.contains("hidden")) {
-      closeThemePopover();
-      elements.themeToggleBtn?.focus();
-    } else {
-      closeSelection();
-    }
-  });
-
-  elements.urlInput?.addEventListener("keydown", (e) => {
-    if (e.key !== "Enter" || e.ctrlKey || e.metaKey) return;
-    if (currentMode() === "basic") {
-      handleQuickDownload();
-    } else {
-      handleFetchFormats();
-    }
-  });
-
-  // Editar a URL reavalia se o vídeo carregado ainda corresponde ao que está no campo.
-  elements.urlInput?.addEventListener("input", () => {
-    clearFieldError(elements.urlError);
-    renderPlaylistHint();
-    render();
-  });
-
+  showDownloadPath();
   render();
-  renderPlaylistHint();
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && !event.defaultPrevented && !event.isComposing) closeSelection();
+  });
 
   try {
-    const version = await bridge.getVersion();
-    if (elements.version) elements.version.textContent = `v${version}`;
+    refs.version.textContent = `Versão ${await bridge.getVersion()}`;
 
-    // A pasta escolhida manualmente sobrevive entre sessões (guardada no
-    // backend); sem escolha prévia, cai no diretório Downloads do SO.
+    // A pasta escolhida sobrevive entre sessões (guardada no backend); sem escolha, cai em Downloads do SO.
     let settings = await bridge.getSettings();
-    const legacyPath = localStorage.getItem(PATH_STORAGE_KEY);
+    const legacyPath = safeStorageGet(PATH_STORAGE_KEY);
     if (legacyPath) {
       // Migração única: versões antigas guardavam a pasta no localStorage.
       if (!settings.downloadPath) settings = await bridge.setDownloadPath(legacyPath);
-      localStorage.removeItem(PATH_STORAGE_KEY);
+      safeStorageRemove(PATH_STORAGE_KEY);
     }
     const downloadsPath = settings.downloadPath || (await bridge.getDownloadsPath());
     if (downloadsPath) {
       state.downloadPath = downloadsPath;
-      updateDownloadPathDisplay();
+      showDownloadPath();
     }
 
     initClipboardUI(settings.clipboardMonitor);
-    initPresetsUI(settings);
-    initConcurrencyUI(settings.maxConcurrent);
+    advanced.initSettings(settings);
+    refs.applyConcurrency(String(settings.maxConcurrent));
+
     await bridge.onQueueChanged((items) => syncQueue(items));
     await bridge.onDownloadProgress((progress) => updateDownloadProgress(progress));
     await bridge.onDownloadFinished((finished) => handleDownloadFinished(finished));
     await bridge.onConversionProgress((progress) => updateConversionProgress(progress));
     await bridge.onConversionFinished((finished) => handleConversionFinished(finished));
-    await bridge.onDebugCommand((command) => showDebugCommand(command.id, command.command));
-    await bridge.onDebugLine((line) => appendDebugLine(line));
+    await bridge.onDebugCommand((command) => handleDebugCommand(command));
+    await bridge.onDebugLine((line) => handleDebugLine(line));
 
     syncQueue(await bridge.getQueue());
     await loadHistory();
   } catch (error) {
-    console.error("Erro ao inicializar:", error);
-    setFieldError(elements.urlError, UI_STRINGS.errorInit);
+    console.error("Failed to initialize:", error);
+    toast({ kind: "error", message: UI_STRINGS.errorInit });
   }
-});
+}
+
+if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", () => void start());
+else void start();

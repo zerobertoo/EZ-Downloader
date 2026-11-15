@@ -1,7 +1,11 @@
+import { checkbox } from "../components/checkbox";
+import { h } from "../components/dom";
+import { setButtonBusy } from "../components/button";
+import { toast } from "../components/toast";
 import { enqueueDownload, type EnqueueParams } from "../downloads";
-import { UI_STRINGS, elements } from "../state";
-import { errorMessage, formatDuration, toggle } from "../utils";
-import { clearFieldErrors, setFieldError } from "./feedback";
+import { UI_STRINGS } from "../state";
+import { errorMessage, formatDuration } from "../utils";
+import { refs } from "./refs";
 
 export interface SelectionEntry {
   url: string;
@@ -25,7 +29,7 @@ export interface SelectionRequest {
   onSingleVideo?: () => void;
 }
 
-let active: { request: SelectionRequest; checked: boolean[] } | null = null;
+let active: { request: SelectionRequest; checked: boolean[]; boxes: HTMLInputElement[] } | null = null;
 let confirming = false;
 
 /** Enfileira em sequência e devolve quem falhou, com o motivo. */
@@ -44,32 +48,31 @@ export async function enqueueEntries(entries: SelectionEntry[], buildParams: Sel
 export function reportEnqueueFailures(failures: EnqueueFailure[], total: number) {
   if (failures.length === 0) return;
   const prefix = total === 1 ? UI_STRINGS.errorStartDownload : UI_STRINGS.errorEnqueuePartial;
-  setFieldError(elements.urlError, `${prefix} ${failures[0].message}`);
-}
-
-export function openSelection(request: SelectionRequest) {
-  active = { request, checked: request.entries.map((entry) => !entry.duplicate) };
-  if (elements.selectionHeading) elements.selectionHeading.textContent = request.heading;
-  const hasDuplicates = request.entries.some((entry) => entry.duplicate);
-  if (elements.selectionNote) {
-    elements.selectionNote.textContent = UI_STRINGS.selectionDuplicateNote;
-    toggle(elements.selectionNote, hasDuplicates);
-  }
-  renderRows();
-  toggle(elements.selectionSingleBtn, Boolean(request.onSingleVideo));
-  toggle(elements.selectionPanel, true);
-  elements.selectionPanel?.scrollIntoView({ block: "nearest" });
+  refs.message.error(`${prefix} ${failures[0].message}`);
 }
 
 export function isSelectionOpen(): boolean {
   return active !== null;
 }
 
+export function openSelection(request: SelectionRequest) {
+  active = { request, checked: request.entries.map((entry) => !entry.duplicate), boxes: [] };
+  refs.selectionTitle.textContent = request.heading;
+  const hasDuplicates = request.entries.some((entry) => entry.duplicate);
+  refs.selectionNote.textContent = hasDuplicates ? UI_STRINGS.selectionDuplicateNote : "";
+  refs.selectionNote.classList.toggle("is-hidden", !hasDuplicates);
+  refs.selectionSingle.classList.toggle("is-hidden", !request.onSingleVideo);
+  renderRows();
+  refs.selectionPanel.classList.remove("is-hidden");
+  refs.selectionPanel.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  refs.selectionConfirm.focus({ preventScroll: true });
+}
+
 /** Enquanto os itens estão sendo enfileirados o painel não fecha: o envio não é abortável. */
 export function closeSelection() {
   if (confirming) return;
   active = null;
-  toggle(elements.selectionPanel, false);
+  refs.selectionPanel.classList.add("is-hidden");
 }
 
 function selectedCount(): number {
@@ -79,13 +82,69 @@ function selectedCount(): number {
 function renderCount() {
   if (!active) return;
   const count = selectedCount();
-  if (elements.selectionCount) elements.selectionCount.textContent = `${count}/${active.checked.length} ${UI_STRINGS.selectionSelected}`;
-  if (elements.selectionConfirmBtn) {
-    elements.selectionConfirmBtn.textContent = `${UI_STRINGS.selectionDownload} ${count}`;
-    elements.selectionConfirmBtn.disabled = count === 0 || confirming;
+  refs.selectionCount.textContent = `${count}/${active.checked.length} ${UI_STRINGS.selectionSelected}`;
+  refs.selectionConfirm.querySelector(".btn__label")!.textContent = `${UI_STRINGS.selectionDownload} ${count}`;
+  refs.selectionConfirm.disabled = count === 0 || confirming;
+  refs.selectionCancel.disabled = confirming;
+  refs.selectionSingle.disabled = confirming;
+}
+
+function renderRows() {
+  if (!active) return;
+  const current = active;
+  current.boxes = [];
+  refs.selectionList.replaceChildren(
+    ...current.request.entries.map((entry, index) => {
+      const control = checkbox({
+        label: entry.title || entry.url,
+        checked: current.checked[index],
+        onChange: (checked) => {
+          current.checked[index] = checked;
+          renderCount();
+        },
+      });
+      current.boxes.push(control.input);
+      control.element.title = entry.url;
+      return h(
+        "div",
+        { class: "sel__row" },
+        control.element,
+        entry.duplicate ? h("span", { class: "badge" }, UI_STRINGS.selectionDuplicateBadge) : null,
+        entry.durationSeconds !== null ? h("span", { class: "sel__meta" }, formatDuration(entry.durationSeconds)) : null
+      );
+    })
+  );
+  renderCount();
+}
+
+function setAll(value: boolean) {
+  if (!active) return;
+  active.checked = active.checked.map(() => value);
+  active.boxes.forEach((box) => (box.checked = value));
+  renderCount();
+}
+
+async function confirmSelection() {
+  if (!active || confirming || selectedCount() === 0) return;
+  const { request, checked } = active;
+  const chosen = request.entries.filter((_, index) => checked[index]);
+  confirming = true;
+  setButtonBusy(refs.selectionConfirm, true);
+  renderCount();
+  try {
+    const failures = await enqueueEntries(chosen, request.buildParams);
+    confirming = false;
+    if (failures.length < chosen.length) {
+      closeSelection();
+      toast({ kind: "success", message: `${chosen.length - failures.length} ${chosen.length - failures.length === 1 ? "item entrou" : "itens entraram"} na fila` });
+      request.onEnqueued?.(failures);
+    }
+    reportEnqueueFailures(failures, chosen.length);
+  } finally {
+    confirming = false;
+    setButtonBusy(refs.selectionConfirm, false);
+    renderCount();
   }
-  if (elements.selectionCancelBtn) elements.selectionCancelBtn.disabled = confirming;
-  if (elements.selectionSingleBtn) elements.selectionSingleBtn.disabled = confirming;
 }
 
 function chooseSingleVideo() {
@@ -95,76 +154,10 @@ function chooseSingleVideo() {
   onSingleVideo();
 }
 
-function renderRows() {
-  const list = elements.selectionList;
-  if (!list || !active) return;
-  list.replaceChildren();
-
-  active.request.entries.forEach((entry, index) => {
-    const row = document.createElement("label");
-    row.className = "flex cursor-pointer items-center gap-3 rounded-lg px-2 py-2 transition-colors duration-150 hover:bg-surface-2 pointer-coarse:min-h-11";
-
-    const checkbox = document.createElement("input");
-    checkbox.type = "checkbox";
-    checkbox.className = "size-4 shrink-0 cursor-pointer accent-accent";
-    checkbox.checked = active?.checked[index] ?? false;
-    checkbox.addEventListener("change", () => {
-      if (!active) return;
-      active.checked[index] = checkbox.checked;
-      renderCount();
-    });
-
-    const text = document.createElement("span");
-    text.className = "min-w-0 flex-1 truncate text-xs text-fg";
-    text.textContent = entry.title || entry.url;
-    text.title = entry.url;
-
-    row.append(checkbox, text);
-
-    if (entry.duplicate) {
-      const badge = document.createElement("span");
-      badge.className = "shrink-0 rounded-full border border-line bg-surface-2 px-2 py-0.5 text-[0.625rem] font-semibold text-fg-3";
-      badge.textContent = UI_STRINGS.selectionDuplicateBadge;
-      row.appendChild(badge);
-    }
-    if (entry.durationSeconds !== null) {
-      const duration = document.createElement("span");
-      duration.className = "shrink-0 font-mono text-[0.6875rem] text-fg-3";
-      duration.textContent = formatDuration(entry.durationSeconds);
-      row.appendChild(duration);
-    }
-    list.appendChild(row);
-  });
-  renderCount();
-}
-
-function setAll(value: boolean) {
-  if (!active) return;
-  active.checked = active.checked.map(() => value);
-  renderRows();
-}
-
-async function confirmSelection() {
-  if (!active || confirming) return;
-  const { request, checked } = active;
-  const chosen = request.entries.filter((_, index) => checked[index]);
-  if (chosen.length === 0) return;
-
-  confirming = true;
-  renderCount();
-  clearFieldErrors();
-  const failures = await enqueueEntries(chosen, request.buildParams);
-  confirming = false;
-  if (active?.request === request) closeSelection();
-  // Antes do aviso: mexer no campo de URL dispara `input`, que limpa o erro exibido.
-  if (failures.length < chosen.length) request.onEnqueued?.(failures);
-  reportEnqueueFailures(failures, chosen.length);
-}
-
 export function initSelectionUI() {
-  elements.selectionAllBtn?.addEventListener("click", () => setAll(true));
-  elements.selectionNoneBtn?.addEventListener("click", () => setAll(false));
-  elements.selectionConfirmBtn?.addEventListener("click", () => void confirmSelection());
-  elements.selectionCancelBtn?.addEventListener("click", closeSelection);
-  elements.selectionSingleBtn?.addEventListener("click", chooseSingleVideo);
+  refs.selectionAll.addEventListener("click", () => setAll(true));
+  refs.selectionNone.addEventListener("click", () => setAll(false));
+  refs.selectionCancel.addEventListener("click", closeSelection);
+  refs.selectionConfirm.addEventListener("click", () => void confirmSelection());
+  refs.selectionSingle.addEventListener("click", chooseSingleVideo);
 }

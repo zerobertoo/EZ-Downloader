@@ -1,3 +1,5 @@
+import { safeStorageGet, safeStorageSet } from "./components/dom";
+
 export type AppMode = "basic" | "advanced";
 
 const STORAGE_KEY = "ez-mode";
@@ -12,14 +14,14 @@ function applyMode(mode: AppMode) {
 }
 
 export function initMode(): AppMode {
-  const saved = localStorage.getItem(STORAGE_KEY);
+  const saved = safeStorageGet(STORAGE_KEY);
   const mode = isAppMode(saved) ? saved : DEFAULT_MODE;
   applyMode(mode);
   return mode;
 }
 
 export function setMode(mode: AppMode) {
-  localStorage.setItem(STORAGE_KEY, mode);
+  safeStorageSet(STORAGE_KEY, mode);
   applyMode(mode);
 }
 

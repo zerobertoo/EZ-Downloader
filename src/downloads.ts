@@ -2,27 +2,26 @@ import {
   bridge,
   type ConversionFinished,
   type ConversionProgress,
+  type DebugCommand,
+  type DebugLine,
   type DownloadFinished,
   type DownloadProgress,
   type MediaReport,
   type QueueItem,
   type StartDownloadOptions,
 } from "./bridge";
-import { UI_STRINGS, elements, state, type ConversionState, type DownloadItem } from "./state";
-import { errorMessage, friendlyErrorMessage, looksLikePlaylist, toggle } from "./utils";
-import { setDebugDownload } from "./ui/debug";
-import { setFieldError } from "./ui/feedback";
+import { button } from "./components/button";
+import { disclosure } from "./components/disclosure";
+import { clamp, h, shortenPath } from "./components/dom";
+import { icon } from "./components/icons";
+import { progressBar, type ProgressBarControl } from "./components/progress";
+import { createTape, type TapeControl } from "./components/tape";
+import { toast } from "./components/toast";
+import { prefs } from "./prefs";
+import { UI_STRINGS, state, type ConversionState, type DownloadItem } from "./state";
+import { errorMessage, friendlyErrorMessage, looksLikePlaylist } from "./utils";
 import { loadHistory } from "./ui/history";
-
-/* ════════════════════════════════════════════════════════════════
-   FILA DE DOWNLOADS — cards concorrentes, da criação ao fim
-   ════════════════════════════════════════════════════════════════ */
-
-/** Referências dos nós de progresso de cada card, pra atualizar sem re-render completo. */
-const progressRefs = new Map<
-  string,
-  { fill: HTMLElement; track: HTMLElement; pct: HTMLElement; statusText: HTMLElement; statsText: HTMLElement }
->();
+import { refs } from "./ui/refs";
 
 export interface EnqueueParams {
   url: string;
@@ -33,7 +32,44 @@ export interface EnqueueParams {
   options: StartDownloadOptions;
 }
 
-function newDownloadItem(fields: Pick<DownloadItem, "id" | "url" | "title" | "formatLabel" | "format" | "outputPath" | "options" | "phase">): DownloadItem {
+interface CardRefs {
+  element: HTMLElement;
+  key: string;
+  tape: TapeControl;
+  bar: ProgressBarControl | null;
+  percent: HTMLElement | null;
+  meta: HTMLElement;
+  optimizeBar: ProgressBarControl | null;
+  optimizePercent: HTMLElement | null;
+  command: HTMLElement | null;
+  log: HTMLElement | null;
+}
+
+const cards = new Map<string, CardRefs>();
+const dismissedIds = new Set<string>();
+const stampedIds = new Set<string>();
+const techOpenIds = new Set<string>();
+const pendingCommands = new Map<string, string>();
+const pendingLines = new Map<string, { stream: "stdout" | "stderr"; text: string }[]>();
+const DEBUG_LOG_MAX_LINES = 500;
+
+let liveRegion: HTMLElement | null = null;
+function announce(message: string) {
+  if (!liveRegion) {
+    liveRegion = h("div", { class: "sr-only", role: "status", "aria-live": "polite" });
+    document.body.appendChild(liveRegion);
+  }
+  liveRegion.textContent = "";
+  requestAnimationFrame(() => (liveRegion!.textContent = message));
+}
+
+function takeBuffered<T>(buffer: Map<string, T>, id: string): T | undefined {
+  const value = buffer.get(id);
+  buffer.delete(id);
+  return value;
+}
+
+function newItem(fields: Pick<DownloadItem, "id" | "url" | "title" | "formatLabel" | "format" | "outputPath" | "options" | "phase">): DownloadItem {
   return {
     ...fields,
     percent: 0,
@@ -43,42 +79,13 @@ function newDownloadItem(fields: Pick<DownloadItem, "id" | "url" | "title" | "fo
     resultPath: null,
     filePath: null,
     conversion: null,
+    optimizeDir: null,
+    debugCommand: takeBuffered(pendingCommands, fields.id) ?? null,
+    debugLines: takeBuffered(pendingLines, fields.id) ?? [],
   };
 }
 
-/** Propaga erro síncrono do backend (ex: opção inválida). */
-export async function enqueueDownload(params: EnqueueParams): Promise<void> {
-  const id = await bridge.startDownload(params.url, params.format, params.outputPath, params.title ?? undefined, params.options);
-
-  // O evento "queue-changed" é emitido antes do comando retornar, então o card
-  // pode já ter sido criado por syncQueue sem o rótulo de formato.
-  const existing = state.downloads.get(id);
-  if (existing) {
-    existing.formatLabel = params.formatLabel;
-    existing.options = params.options;
-    // renderKey não inclui o rótulo, então força a recriação do card.
-    renderedCards.get(id)?.el.remove();
-    renderedCards.delete(id);
-  } else {
-    state.downloads.set(
-      id,
-      newDownloadItem({
-        id,
-        url: params.url,
-        title: params.title,
-        formatLabel: params.formatLabel,
-        format: params.format,
-        outputPath: params.outputPath,
-        options: params.options,
-        phase: "queued",
-      })
-    );
-  }
-  setDebugDownload(id);
-  renderDownloads();
-}
-
-function formatLabelFor(format: string): string {
+export function formatLabelFor(format: string): string {
   if (format === "quick-mp3") return "MP3";
   if (format === "quick-mp4" || format === "best") return "MP4";
   return format;
@@ -102,18 +109,41 @@ function startOptionsFrom({ options, scheduledAt }: QueueItem): StartDownloadOpt
   };
 }
 
+function isPending(phase: DownloadItem["phase"]): phase is "queued" | "active" | "paused" {
+  return phase === "queued" || phase === "active" || phase === "paused";
+}
+
+/** Propaga erro síncrono do backend (ex: opção inválida). */
+export async function enqueueDownload(params: EnqueueParams): Promise<void> {
+  const id = await bridge.startDownload(params.url, params.format, params.outputPath, params.title ?? undefined, params.options);
+
+  // O evento "queue-changed" chega antes do comando retornar: o card pode já existir sem o rótulo de formato.
+  const existing = state.downloads.get(id);
+  if (existing) {
+    existing.formatLabel = params.formatLabel;
+    existing.options = params.options;
+    dropCard(id);
+  } else {
+    state.downloads.set(
+      id,
+      newItem({ id, url: params.url, title: params.title, formatLabel: params.formatLabel, format: params.format, outputPath: params.outputPath, options: params.options, phase: "queued" })
+    );
+  }
+  renderDownloads();
+}
+
 /** Espelha a fila do backend (fonte da verdade): cria cards de itens restaurados e atualiza o estado dos conhecidos. */
 export function syncQueue(items: QueueItem[]) {
   for (const queued of items) {
     if (dismissedIds.has(queued.id)) continue;
     const existing = state.downloads.get(queued.id);
     if (existing) {
-      if (isPendingPhase(existing.phase)) existing.phase = queued.status;
+      if (isPending(existing.phase)) existing.phase = queued.status;
       continue;
     }
     state.downloads.set(
       queued.id,
-      newDownloadItem({
+      newItem({
         id: queued.id,
         url: queued.url,
         title: queued.title,
@@ -131,69 +161,105 @@ export function syncQueue(items: QueueItem[]) {
 function queuedStatusLabel(item: DownloadItem): string {
   const scheduledAt = item.options.scheduledAt;
   if (!scheduledAt || scheduledAt * 1000 <= Date.now()) return UI_STRINGS.statusQueued;
-  const when = new Date(scheduledAt * 1000).toLocaleString(undefined, { dateStyle: "short", timeStyle: "short" });
+  const when = new Date(scheduledAt * 1000).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" });
   return `${UI_STRINGS.statusScheduled} ${when}`;
 }
 
-function isPendingPhase(phase: DownloadItem["phase"]): phase is "queued" | "active" | "paused" {
-  return phase === "queued" || phase === "active" || phase === "paused";
+function progressLabel(percent: number): string {
+  if (percent < 15) return UI_STRINGS.progressStarting;
+  if (percent < 90) return UI_STRINGS.progressDownloading;
+  return UI_STRINGS.progressFinalizing;
+}
+
+function metaFor(item: DownloadItem): HTMLElement[] {
+  switch (item.phase) {
+    case "queued":
+      return [h("span", {}, queuedStatusLabel(item))];
+    case "paused":
+      return [h("span", {}, UI_STRINGS.statusPaused)];
+    case "active": {
+      const stats = [item.speed, item.eta ? `faltam ${item.eta}` : null].filter(Boolean).join(" · ");
+      return [h("span", {}, progressLabel(item.percent)), stats ? h("span", { class: "mono" }, stats) : h("span")];
+    }
+    case "done":
+      return [h("span", { class: "mono", title: item.resultPath ?? "" }, item.resultPath ? shortenPath(item.resultPath, 3) : UI_STRINGS.statusDone)];
+    case "failed":
+      return [h("span", { class: "is-error" }, item.error ? friendlyErrorMessage(errorMessage(item.error)) : UI_STRINGS.statusFailed)];
+    case "cancelled":
+      return [h("span", {}, UI_STRINGS.statusCancelled)];
+  }
+}
+
+function paintMeta(target: HTMLElement, item: DownloadItem) {
+  target.replaceChildren(...metaFor(item));
+}
+
+function dropCard(id: string) {
+  cards.get(id)?.element.remove();
+  cards.delete(id);
+}
+
+/** Só cria, troca ou remove os cards que mudaram: recriar tudo reiniciaria animações e fecharia os detalhes técnicos. */
+export function renderDownloads() {
+  const list = refs.shelfList;
+  if (!list) return;
+
+  for (const id of [...cards.keys()]) if (!state.downloads.has(id)) dropCard(id);
+
+  for (const item of state.downloads.values()) {
+    const key = `${item.phase}:${item.conversion?.phase ?? ""}:${item.optimizeDir ?? ""}`;
+    const existing = cards.get(item.id);
+    if (existing?.key === key) continue;
+
+    const built = buildCard(item, key);
+    if (existing) {
+      built.element.style.animation = "none";
+      existing.element.replaceWith(built.element);
+    } else {
+      list.prepend(built.element);
+    }
+    cards.set(item.id, built);
+  }
+
+  const total = state.downloads.size;
+  const running = [...state.downloads.values()].filter((item) => item.phase === "active").length;
+  refs.shelfEmpty.classList.toggle("is-hidden", total > 0);
+  refs.shelfList.classList.toggle("is-hidden", total === 0);
+  refs.shelfCount.textContent = total === 0 ? "" : running > 0 ? `${running} baixando · ${total} no total` : `${total} ${total === 1 ? "item" : "itens"}`;
 }
 
 export function initDownloadsUI() {
-  elements.downloadsList?.addEventListener("click", (e) => {
-    const target = e.target as HTMLElement;
-    const card = target.closest<HTMLElement>("[data-download-id]");
-    const id = card?.dataset.downloadId;
-    if (!id) return;
+  renderDownloads();
+}
 
-    if (target.closest(".js-cancel")) void handleCancel(id);
-    else if (target.closest(".js-pause")) void handleQueueAction(() => bridge.pauseDownload(id));
-    else if (target.closest(".js-resume")) void handleQueueAction(() => bridge.resumeDownload(id));
-    else if (target.closest(".js-prioritize")) void handleQueueAction(() => bridge.reorderDownload(id, 0));
-    else if (target.closest(".js-retry")) void handleRetry(id);
-    else if (target.closest(".js-open-folder")) void handleOpenFolder(id);
-    else if (target.closest(".js-remove")) handleRemove(id);
-    else if (target.closest(".js-convert")) void handleConvert(id);
-    else if (target.closest(".js-cancel-convert")) void handleCancelConversion(id);
-  });
+async function runQueueAction(action: () => Promise<void>) {
+  try {
+    await action();
+  } catch (error) {
+    console.error("Failed to change the queue:", error);
+    toast({ kind: "error", message: errorMessage(error) });
+  }
 }
 
 async function handleCancel(id: string) {
   try {
     await bridge.cancelDownload(id);
   } catch (error) {
-    console.error("Erro ao cancelar:", error);
-    setFieldError(elements.urlError, UI_STRINGS.errorCancel);
+    console.error("Failed to cancel:", error);
+    toast({ kind: "error", message: UI_STRINGS.errorCancel });
   }
 }
 
-async function handleQueueAction(action: () => Promise<void>) {
-  try {
-    await action();
-  } catch (error) {
-    console.error("Erro ao alterar a fila:", error);
-    setFieldError(elements.urlError, errorMessage(error));
-  }
-}
-
-/** Só remove o card antigo depois do reenvio dar certo — senão um erro síncrono
- * (ex: opção inválida) faz o download sumir sem feedback. */
+/** Só remove o card antigo depois do reenvio dar certo: um erro síncrono não pode fazer o download sumir. */
 async function handleRetry(id: string) {
   const item = state.downloads.get(id);
   if (!item) return;
   try {
-    await enqueueDownload({
-      url: item.url,
-      format: item.format,
-      formatLabel: item.formatLabel,
-      title: item.title,
-      outputPath: item.outputPath,
-      options: item.options,
-    });
+    await enqueueDownload({ url: item.url, format: item.format, formatLabel: item.formatLabel, title: item.title, outputPath: item.outputPath, options: item.options });
     handleRemove(id);
   } catch (error) {
-    console.error("Erro ao reenviar download:", error);
-    setFieldError(elements.urlError, `${UI_STRINGS.errorStartDownload} ${errorMessage(error)}`);
+    console.error("Failed to resubmit download:", error);
+    toast({ kind: "error", message: `${UI_STRINGS.errorStartDownload} ${errorMessage(error)}` });
   }
 }
 
@@ -203,304 +269,196 @@ async function handleOpenFolder(id: string) {
   try {
     await bridge.openPath(item.resultPath);
   } catch (error) {
-    console.error("Erro ao abrir pasta:", error);
-    setFieldError(elements.urlError, UI_STRINGS.errorOpenFolder);
+    console.error("Failed to open folder:", error);
+    toast({ kind: "error", message: UI_STRINGS.errorOpenFolder });
   }
 }
-
-/** Cards removidos pelo usuário: um queue-changed atrasado não pode recriá-los. */
-const dismissedIds = new Set<string>();
 
 function handleRemove(id: string) {
   if (state.downloads.get(id)?.conversion?.phase === "running") void bridge.cancelConversion(id);
   dismissedIds.add(id);
+  stampedIds.delete(id);
+  techOpenIds.delete(id);
+  pendingCommands.delete(id);
+  pendingLines.delete(id);
   state.downloads.delete(id);
-  progressRefs.delete(id);
-  renderDownloads();
+  const card = cards.get(id);
+  if (!card) return renderDownloads();
+  card.element.classList.add("is-leaving");
+  cards.delete(id);
+  setTimeout(() => {
+    card.element.remove();
+    renderDownloads();
+  }, 300);
 }
 
 export function updateDownloadProgress(progress: DownloadProgress) {
   const item = state.downloads.get(progress.id);
   if (!item || item.phase !== "active") return;
-
-  item.percent = progress.percent;
+  item.percent = clamp(progress.percent, 0, 100);
   item.speed = progress.speed;
   item.eta = progress.eta;
 
-  const refs = progressRefs.get(progress.id);
-  if (!refs) return;
-  const clamped = Math.min(Math.max(progress.percent, 0), 100);
-  refs.fill.style.width = `${clamped}%`;
-  refs.track.setAttribute("aria-valuenow", String(Math.round(clamped)));
-  refs.pct.textContent = `${Math.round(clamped)}%`;
-  refs.statusText.textContent = progressStatusLabel(clamped);
-  const parts: string[] = [];
-  if (progress.speed) parts.push(progress.speed);
-  if (progress.eta) parts.push(`ETA ${progress.eta}`);
-  refs.statsText.textContent = parts.join(" • ");
-}
-
-function progressStatusLabel(percent: number): string {
-  if (percent < 30) return UI_STRINGS.progressStarting;
-  if (percent < 70) return UI_STRINGS.progressDownloading;
-  if (percent < 100) return UI_STRINGS.progressFinalizing;
-  return UI_STRINGS.progressComplete;
+  const card = cards.get(progress.id);
+  if (!card) return;
+  card.tape.update("active", item.percent);
+  card.bar?.set(item.percent);
+  if (card.percent) card.percent.textContent = `${Math.round(item.percent)}%`;
+  paintMeta(card.meta, item);
 }
 
 export function handleDownloadFinished(payload: DownloadFinished) {
   const item = state.downloads.get(payload.id);
   if (!item) return;
-
   item.phase = payload.status;
   item.resultPath = payload.path;
   item.filePath = payload.filePath;
   item.error = payload.error;
+  if (payload.status === "done") item.percent = 100;
   renderDownloads();
   void loadHistory();
+  const name = item.title || item.url;
+  announce(payload.status === "done" ? `Download concluído: ${name}` : payload.status === "failed" ? `Download falhou: ${name}` : `Download cancelado: ${name}`);
   // numa playlist só o último arquivo é conhecido, então não há o que oferecer
   if (payload.status === "done" && payload.filePath && !looksLikePlaylist(item.url)) {
-    void offerConversionIfNeeded(item.id, payload.filePath);
+    void offerOptimizationIfNeeded(item.id, payload.filePath);
   }
 }
 
-const renderedCards = new Map<string, { el: HTMLElement; key: string }>();
-
-function renderKey(item: DownloadItem): string {
-  return `${item.phase}:${item.conversion?.phase ?? ""}`;
+export function handleDebugCommand(command: DebugCommand) {
+  const item = state.downloads.get(command.id);
+  if (!item) {
+    pendingCommands.set(command.id, command.command);
+    return;
+  }
+  item.debugCommand = command.command;
+  const card = cards.get(command.id);
+  if (card?.command) card.command.textContent = command.command;
 }
 
-/** Só cria/troca/remove os cards que mudaram: recriar todos reiniciava a animação e fechava os "Detalhes técnicos". */
-function renderDownloads() {
-  const list = elements.downloadsList;
-  if (!list) return;
-
-  toggle(elements.downloadsSection, state.downloads.size > 0);
-
-  for (const [id, entry] of renderedCards) {
-    if (!state.downloads.has(id)) {
-      entry.el.remove();
-      renderedCards.delete(id);
-      progressRefs.delete(id);
-      conversionRefs.delete(id);
-    }
+export function handleDebugLine(line: DebugLine) {
+  const item = state.downloads.get(line.id);
+  const entry = { stream: line.stream, text: line.text };
+  if (!item) {
+    const buffered = pendingLines.get(line.id) ?? [];
+    buffered.push(entry);
+    pendingLines.set(line.id, buffered);
+    return;
   }
-
-  for (const item of state.downloads.values()) {
-    const existing = renderedCards.get(item.id);
-    const key = renderKey(item);
-    if (existing && existing.key === key) continue;
-
-    const el = buildCard(item);
-    if (existing) {
-      // mudou de fase (ex: ativo → concluído): troca no lugar, sem reanimar a entrada
-      el.style.animation = "none";
-      existing.el.replaceWith(el);
-    } else {
-      list.prepend(el);
-    }
-    renderedCards.set(item.id, { el, key });
-  }
+  item.debugLines.push(entry);
+  if (item.debugLines.length > DEBUG_LOG_MAX_LINES) item.debugLines.splice(0, item.debugLines.length - DEBUG_LOG_MAX_LINES);
+  const log = cards.get(line.id)?.log;
+  if (!log) return;
+  const stick = log.scrollTop + log.clientHeight >= log.scrollHeight - 8;
+  log.appendChild(logLine(entry));
+  if (stick) log.scrollTop = log.scrollHeight;
 }
 
-function buildCard(item: DownloadItem): HTMLElement {
-  const card = document.createElement("div");
-  card.className = "animate-appear rounded-[1.25rem] border border-line bg-surface px-[18px] py-4 shadow-card-sm";
-  card.dataset.downloadId = item.id;
+function logLine(entry: { stream: "stdout" | "stderr"; text: string }): HTMLElement {
+  return h("div", { class: entry.stream === "stderr" ? "is-stderr" : "" }, entry.text);
+}
 
-  const head = document.createElement("div");
-  head.className = "mb-3.5 flex items-center gap-2.5";
+/* ── Card ──────────────────────────────────────────────────── */
 
-  const title = document.createElement("span");
-  title.className = "min-w-0 flex-1 truncate text-sm font-semibold text-fg";
-  title.textContent = item.title || item.url;
-  head.appendChild(title);
+function shortFormat(label: string): string {
+  return label.length > 8 ? label.slice(0, 8) : label;
+}
 
-  const badge = document.createElement("span");
-  badge.className = "flex h-[22px] shrink-0 items-center rounded-full border border-line-focus bg-accent-dim px-[9px] text-[0.6875rem] font-bold text-accent-bright";
-  badge.textContent = item.formatLabel;
-  head.appendChild(badge);
+function buildTechnical(item: DownloadItem): { element: HTMLElement; command: HTMLElement; log: HTMLElement } {
+  const command = h("code", { "data-empty": "O comando aparece quando o download começa" }, item.debugCommand ?? "");
+  const log = h("div", { class: "log", "data-empty": "Aguardando a saída do yt-dlp...", "aria-live": "off" }, ...item.debugLines.map(logLine));
+  const box = h("div", { class: "techbox" }, command, log);
+  const control = disclosure({
+    title: "Detalhes técnicos",
+    content: box,
+    open: techOpenIds.has(item.id) || prefs.technicalOpen,
+    className: "disclosure--quiet",
+    onToggle: (open) => {
+      if (open) techOpenIds.add(item.id);
+      else techOpenIds.delete(item.id);
+      if (open) requestAnimationFrame(() => (log.scrollTop = log.scrollHeight));
+    },
+  });
+  return { element: control.element, command, log };
+}
 
-  if (!isPendingPhase(item.phase)) {
-    const remove = document.createElement("button");
-    remove.className = "js-remove flex size-[22px] shrink-0 items-center justify-center rounded-full text-fg-3 transition-colors duration-150 hover:bg-surface-3 hover:text-fg pointer-coarse:size-11";
-    remove.setAttribute("aria-label", UI_STRINGS.downloadRemove);
-    remove.innerHTML = `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/><line x1="6" y1="6" x2="18" y2="18" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg>`;
+function actionButton(label: string, iconName: Parameters<typeof icon>[0], onClick: () => void, variant: "secondary" | "ghost" | "primary" = "ghost") {
+  return button({ label, icon: iconName, variant, size: "sm", onClick });
+}
+
+function buildCard(item: DownloadItem, key: string): CardRefs {
+  const tape = createTape(shortFormat(item.formatLabel).toUpperCase());
+  tape.update(item.phase === "queued" ? "queued" : item.phase, item.percent);
+
+  const title = h("span", { class: "tapecard__title", title: item.title || item.url }, item.title || item.url);
+  const head = h("div", { class: "tapecard__head" }, title, h("span", { class: "sticker" }, item.formatLabel));
+  const meta = h("div", { class: "tapecard__meta" });
+  paintMeta(meta, item);
+
+  let remove: HTMLButtonElement | null = null;
+  if (!isPending(item.phase)) {
+    remove = button({ icon: "x", variant: "ghost", size: "sm", ariaLabel: UI_STRINGS.downloadRemove, tooltip: UI_STRINGS.downloadRemove, onClick: () => handleRemove(item.id) });
     head.appendChild(remove);
   }
 
-  card.appendChild(head);
+  const body = h("div", { class: "tapecard__body" }, head, meta);
+  const side = h("div", { class: "tapecard__side" });
+  const more = h("div", { class: "tapecard__more" });
+  let bar: ProgressBarControl | null = null;
+  let percent: HTMLElement | null = null;
 
-  if (isPendingPhase(item.phase)) {
-    card.appendChild(buildProgressRegion(item));
+  if (isPending(item.phase)) {
+    bar = progressBar(`Progresso de ${item.title || "download"}`);
+    bar.set(item.percent, item.phase === "queued");
+    body.appendChild(bar.element);
+    percent = h("div", { class: "tapecard__pct" }, `${Math.round(item.percent)}%`);
+    side.appendChild(percent);
+
+    const actions = h("div", { class: "tapecard__actions" });
+    if (item.phase === "queued") actions.appendChild(actionButton(UI_STRINGS.downloadPrioritize, "bolt", () => void runQueueAction(() => bridge.reorderDownload(item.id, 0))));
+    if (item.phase === "paused") actions.appendChild(actionButton(UI_STRINGS.downloadResume, "play", () => void runQueueAction(() => bridge.resumeDownload(item.id)), "secondary"));
+    else if (item.phase === "active") actions.appendChild(actionButton(UI_STRINGS.downloadPause, "pause", () => void runQueueAction(() => bridge.pauseDownload(item.id)), "secondary"));
+    actions.appendChild(actionButton(UI_STRINGS.downloadCancel, "x", () => void handleCancel(item.id)));
+    body.appendChild(actions);
   } else {
-    card.appendChild(buildOutcomeBanner(item));
-    if (item.phase === "done" && item.conversion) card.appendChild(buildConversionPanel(item, item.conversion));
+    const kind = item.phase;
+    const stamp = h("span", { class: ["stamp", kind !== "done" && `stamp--${kind}`] }, kind === "done" ? "PRONTO" : kind === "failed" ? "FALHOU" : "CANCELADO");
+    if (kind === "done" && !stampedIds.has(item.id)) {
+      stampedIds.add(item.id);
+      stamp.classList.add("is-stamping");
+    }
+    side.appendChild(stamp);
+    const actions = h("div", { class: "tapecard__actions" });
+    if (kind === "done") actions.appendChild(actionButton(UI_STRINGS.downloadOpenFolder, "folder", () => void handleOpenFolder(item.id), "secondary"));
+    else actions.appendChild(actionButton(UI_STRINGS.downloadRetry, "refresh", () => void handleRetry(item.id), "secondary"));
+    body.appendChild(actions);
   }
 
-  return card;
+  let optimizeBar: ProgressBarControl | null = null;
+  let optimizePercent: HTMLElement | null = null;
+  if (item.phase === "done" && item.conversion) {
+    const panel = buildOptimizePanel(item, item.conversion);
+    more.appendChild(panel.element);
+    optimizeBar = panel.bar;
+    optimizePercent = panel.percent;
+  }
+
+  const technical = buildTechnical(item);
+  more.appendChild(technical.element);
+
+  const element = h(
+    "article",
+    { class: "tapecard", "data-download-id": item.id, "data-state": item.phase, "aria-label": item.title || item.url },
+    h("div", { class: "tapecard__tape" }, tape.element),
+    body,
+    side,
+    more
+  );
+
+  return { element, key, tape, bar, percent, meta, optimizeBar, optimizePercent, command: technical.command, log: technical.log };
 }
 
-function buildProgressRegion(item: DownloadItem): HTMLElement {
-  const region = document.createElement("div");
-  region.className = "relative flex animate-appear flex-col gap-3.5";
-
-  const header = document.createElement("div");
-  header.className = "flex items-center gap-4";
-  header.innerHTML = `
-    <div class="relative flex size-[50px] shrink-0 items-center justify-center" aria-hidden="true">
-      <div class="absolute inset-0 ${item.phase === "active" ? "animate-ring" : ""} rounded-full border-[1.5px] border-accent/20 motion-reduce:animate-none motion-reduce:opacity-50"></div>
-      <div class="absolute inset-[7px] flex items-center justify-center rounded-full border border-accent/30 bg-accent-dim text-accent">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-          <polyline points="7 10 12 15 17 10" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-          <line x1="12" y1="15" x2="12" y2="3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-        </svg>
-      </div>
-    </div>
-    <div class="min-w-0 flex-1">
-      <p class="progress-status-text mb-[3px] text-base font-semibold tracking-[-0.02em] text-fg"></p>
-      <p class="progress-stats-text min-h-[15px] font-mono text-[0.6875rem] tracking-[0.01em] text-fg-3"></p>
-    </div>
-    <div class="progress-pct min-w-[68px] shrink-0 text-right font-mono text-[1.875rem] leading-none font-bold tracking-[-0.04em] text-accent">0%</div>
-  `;
-  region.appendChild(header);
-
-  const track = document.createElement("div");
-  track.className = "relative h-1.5 overflow-hidden rounded-full bg-surface-3";
-  track.setAttribute("role", "progressbar");
-  track.setAttribute("aria-valuemin", "0");
-  track.setAttribute("aria-valuemax", "100");
-  const fill = document.createElement("div");
-  fill.className = PROGRESS_FILL_CLASS;
-  track.appendChild(fill);
-  region.appendChild(track);
-
-  const actions = document.createElement("div");
-  actions.className = "flex items-center gap-2";
-  const toggleBtn = document.createElement("button");
-  const isPaused = item.phase === "paused";
-  toggleBtn.className = `${isPaused ? "js-resume" : "js-pause"} btn-ghost h-[34px] px-[15px] text-xs font-medium pointer-coarse:min-h-11`;
-  toggleBtn.textContent = isPaused ? UI_STRINGS.downloadResume : UI_STRINGS.downloadPause;
-  const cancelBtn = document.createElement("button");
-  cancelBtn.className = "js-cancel btn-ghost h-[34px] px-[15px] text-xs font-medium pointer-coarse:min-h-11";
-  cancelBtn.textContent = "Cancelar";
-  actions.append(toggleBtn, cancelBtn);
-  if (item.phase === "queued") {
-    const prioritizeBtn = document.createElement("button");
-    prioritizeBtn.className = "js-prioritize btn-ghost h-[34px] px-[15px] text-xs font-medium pointer-coarse:min-h-11";
-    prioritizeBtn.textContent = UI_STRINGS.downloadPrioritize;
-    actions.prepend(prioritizeBtn);
-  }
-  region.appendChild(actions);
-
-  const statusText = header.querySelector(".progress-status-text") as HTMLElement;
-  const statsText = header.querySelector(".progress-stats-text") as HTMLElement;
-  const pct = header.querySelector(".progress-pct") as HTMLElement;
-  progressRefs.set(item.id, { fill, track, pct, statusText, statsText });
-
-  const clamped = Math.min(Math.max(item.percent, 0), 100);
-  fill.style.width = `${clamped}%`;
-  track.setAttribute("aria-valuenow", String(Math.round(clamped)));
-  pct.textContent = `${Math.round(clamped)}%`;
-  statusText.textContent =
-    item.phase === "queued" ? queuedStatusLabel(item) : item.phase === "paused" ? UI_STRINGS.statusPaused : progressStatusLabel(clamped);
-  const parts: string[] = [];
-  if (item.phase === "active") {
-    if (item.speed) parts.push(item.speed);
-    if (item.eta) parts.push(`ETA ${item.eta}`);
-  }
-  statsText.textContent = parts.join(" • ");
-
-  return region;
-}
-
-const BANNER_BTN = "btn-accent h-[34px] gap-[7px] rounded-lg px-3.5 text-xs tracking-[-0.015em] pointer-coarse:min-h-11";
-
-const OUTCOME_CLASS: Record<"done" | "failed" | "cancelled", { banner: string; icon: string }> = {
-  done: {
-    banner: "border-green/20 bg-green-dim",
-    icon: "border-green/30 bg-green-dim text-green",
-  },
-  failed: {
-    banner: "border-red/20 bg-red-dim",
-    icon: "border-red/30 bg-red-dim text-red",
-  },
-  cancelled: {
-    banner: "border-line bg-surface-2",
-    icon: "border-line-2 bg-surface-3 text-fg-3",
-  },
-};
-
-function buildOutcomeBanner(item: DownloadItem): HTMLElement {
-  const banner = document.createElement("div");
-  banner.className = `flex animate-appear flex-wrap items-start gap-3 rounded-xl border px-4 py-3.5 ${OUTCOME_CLASS[item.phase as "done" | "failed" | "cancelled"].banner}`;
-
-  const icon = document.createElement("div");
-  icon.className = `flex size-[30px] shrink-0 items-center justify-center rounded-full border ${OUTCOME_CLASS[item.phase as "done" | "failed" | "cancelled"].icon}`;
-  icon.innerHTML =
-    item.phase === "done"
-      ? `<svg class="banner-icon-success" width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M20 6L9 17l-5-5" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>`
-      : `<svg class="banner-icon-error" width="15" height="15" viewBox="0 0 24 24" fill="none"><line x1="18" y1="6" x2="6" y2="18" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/><line x1="6" y1="6" x2="18" y2="18" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/></svg>`;
-  banner.appendChild(icon);
-
-  const body = document.createElement("div");
-  body.className = "min-w-[190px] flex-1";
-  const bannerTitle = document.createElement("p");
-  bannerTitle.className = "mb-0.5 text-sm font-bold tracking-[-0.025em] text-fg empty:hidden";
-  bannerTitle.textContent =
-    item.phase === "done" ? UI_STRINGS.statusDone : item.phase === "failed" ? UI_STRINGS.statusFailed : UI_STRINGS.statusCancelled;
-  body.appendChild(bannerTitle);
-  const bannerText = document.createElement("p");
-  bannerText.className = `text-xs leading-[1.55] break-all ${item.phase === "done" ? "font-mono text-fg-2" : "text-red"}`;
-  const rawError = item.phase !== "done" && item.error ? errorMessage(item.error) : null;
-  bannerText.textContent = item.phase === "done" ? item.resultPath ?? "" : rawError ? friendlyErrorMessage(rawError) : "";
-  body.appendChild(bannerText);
-
-  if (rawError) {
-    const details = document.createElement("details");
-    details.className = "mt-2 text-[0.6875rem]";
-    details.open = state.nerdMode;
-    const summary = document.createElement("summary");
-    summary.className = "cursor-pointer text-fg-3 select-none hover:text-fg-2";
-    summary.textContent = "Detalhes técnicos";
-    details.appendChild(summary);
-    const rawText = document.createElement("code");
-    rawText.className = "mt-1.5 block rounded-lg border border-line bg-surface-2 px-2.5 py-2 font-mono text-[0.6875rem] leading-normal break-all whitespace-pre-wrap text-fg-3";
-    rawText.textContent = rawError;
-    details.appendChild(rawText);
-    body.appendChild(details);
-  }
-
-  banner.appendChild(body);
-
-  const actions = document.createElement("div");
-  actions.className = "flex flex-wrap items-center gap-2";
-  if (item.phase === "done") {
-    const openBtn = document.createElement("button");
-    openBtn.className = `${BANNER_BTN} bg-green text-[#021c0e] shadow-[0_3px_14px_rgba(52,211,153,0.32)] hover:not-disabled:bg-green hover:not-disabled:shadow-[0_5px_20px_rgba(52,211,153,0.46)] js-open-folder`;
-    openBtn.textContent = UI_STRINGS.downloadOpenFolder;
-    actions.appendChild(openBtn);
-  }
-  if (item.phase === "failed" || item.phase === "cancelled") {
-    const retryBtn = document.createElement("button");
-    retryBtn.className = `${BANNER_BTN} shadow-accent-sm hover:not-disabled:shadow-accent-sm-hover js-retry`;
-    retryBtn.textContent = UI_STRINGS.downloadRetry;
-    actions.appendChild(retryBtn);
-  }
-  banner.appendChild(actions);
-
-  return banner;
-}
-
-/* ════════════════════════════════════════════════════════════════
-   CONVERSÃO PARA H.264 — oferecida no card concluído quando o codec
-   baixado (VP9/AV1/Opus) costuma não abrir no Premiere e similares
-   ════════════════════════════════════════════════════════════════ */
-
-const PROGRESS_FILL_CLASS =
-  "relative h-full w-0 rounded-full bg-linear-to-r from-accent to-accent-bright transition-[width] duration-[450ms] ease-app after:absolute after:top-0 after:right-0 after:h-full after:w-[50px] after:animate-shimmer after:rounded-full after:bg-linear-to-r after:from-transparent after:to-white/40 after:content-[''] motion-reduce:after:hidden";
-
-const conversionRefs = new Map<string, { fill: HTMLElement; track: HTMLElement; pct: HTMLElement }>();
+/* ── Otimizar compatibilidade ──────────────────────────────── */
 
 function describeCodecs(report: MediaReport): string {
   return [report.videoCodec, report.audioCodec]
@@ -509,19 +467,20 @@ function describeCodecs(report: MediaReport): string {
     .join(" + ");
 }
 
-async function offerConversionIfNeeded(id: string, filePath: string) {
+async function offerOptimizationIfNeeded(id: string, filePath: string) {
   try {
     const report = await bridge.analyzeMedia(filePath);
     const item = state.downloads.get(id);
     if (!item || !report.needsConversion) return;
     item.conversion = { phase: "offer", report };
     renderDownloads();
+    if (prefs.autoOptimize) void startOptimization(id);
   } catch (error) {
-    console.warn("Não foi possível analisar o arquivo baixado:", error);
+    console.warn("Failed to inspect the downloaded file:", error);
   }
 }
 
-async function handleConvert(id: string) {
+export async function startOptimization(id: string) {
   const item = state.downloads.get(id);
   const conversion = item?.conversion;
   if (!item || !item.filePath || !conversion) return;
@@ -530,34 +489,44 @@ async function handleConvert(id: string) {
   item.conversion = { phase: "running", report: conversion.report, percent: 0 };
   renderDownloads();
   try {
-    await bridge.startConversion(id, item.filePath);
+    await bridge.startConversion(id, item.filePath, item.optimizeDir ?? undefined);
   } catch (error) {
-    console.error("Erro ao iniciar conversão:", error);
+    console.error("Failed to start optimization:", error);
     item.conversion = { phase: "failed", report: conversion.report, error: errorMessage(error) };
     renderDownloads();
   }
 }
 
-async function handleCancelConversion(id: string) {
+async function chooseOptimizeFolder(id: string) {
+  const item = state.downloads.get(id);
+  if (!item) return;
+  try {
+    const folder = await bridge.selectDownloadPath();
+    if (!folder) return;
+    item.optimizeDir = folder;
+    renderDownloads();
+  } catch (error) {
+    console.error("Failed to choose folder:", error);
+    toast({ kind: "error", message: UI_STRINGS.errorSelectDir });
+  }
+}
+
+async function cancelOptimization(id: string) {
   try {
     await bridge.cancelConversion(id);
   } catch (error) {
-    console.error("Erro ao cancelar conversão:", error);
-    setFieldError(elements.urlError, UI_STRINGS.errorCancel);
+    console.error("Failed to cancel optimization:", error);
+    toast({ kind: "error", message: UI_STRINGS.errorCancel });
   }
 }
 
 export function updateConversionProgress(progress: ConversionProgress) {
   const conversion = state.downloads.get(progress.id)?.conversion;
   if (conversion?.phase !== "running") return;
-
-  const clamped = Math.min(Math.max(progress.percent, 0), 100);
-  conversion.percent = clamped;
-  const refs = conversionRefs.get(progress.id);
-  if (!refs) return;
-  refs.fill.style.width = `${clamped}%`;
-  refs.track.setAttribute("aria-valuenow", String(Math.round(clamped)));
-  refs.pct.textContent = `${Math.round(clamped)}%`;
+  conversion.percent = clamp(progress.percent, 0, 100);
+  const card = cards.get(progress.id);
+  card?.optimizeBar?.set(conversion.percent);
+  if (card?.optimizePercent) card.optimizePercent.textContent = `${Math.round(conversion.percent)}%`;
 }
 
 export function handleConversionFinished(finished: ConversionFinished) {
@@ -567,80 +536,65 @@ export function handleConversionFinished(finished: ConversionFinished) {
 
   if (finished.status === "done" && finished.path) {
     item.conversion = { phase: "done", outputPath: finished.path };
+    toast({ kind: "success", message: UI_STRINGS.optimizeDone, actionLabel: UI_STRINGS.downloadOpenFolder, onAction: () => void bridge.openPath(finished.path!) });
   } else if (finished.status === "failed") {
-    item.conversion = { phase: "failed", report: conversion.report, error: finished.error ?? UI_STRINGS.conversionFailed };
+    item.conversion = { phase: "failed", report: conversion.report, error: finished.error ?? UI_STRINGS.optimizeFailed };
   } else {
     item.conversion = { phase: "offer", report: conversion.report };
   }
   renderDownloads();
 }
 
-function buildConversionButton(label: string, jsClass: string, ghost: boolean): HTMLButtonElement {
-  const button = document.createElement("button");
-  const look = ghost ? "btn-ghost" : `${BANNER_BTN} shadow-accent-sm hover:not-disabled:shadow-accent-sm-hover`;
-  button.className = `${look} h-[34px] px-3.5 text-xs pointer-coarse:min-h-11 ${jsClass}`;
-  button.textContent = label;
-  return button;
+function destinationRow(item: DownloadItem): HTMLElement {
+  const chosen = item.optimizeDir;
+  const change = button({ label: "Trocar pasta", icon: "folder", variant: "ghost", size: "sm", onClick: () => void chooseOptimizeFolder(item.id) });
+  return h(
+    "div",
+    { class: "optimize__dest" },
+    icon("folder", 16),
+    h("span", {}, "Salvar em:"),
+    h("span", { class: "mono", title: chosen ?? "" }, chosen ? shortenPath(chosen, 3) : UI_STRINGS.optimizeBesideOriginal),
+    change
+  );
 }
 
-function buildConversionPanel(item: DownloadItem, conversion: ConversionState): HTMLElement {
-  const panel = document.createElement("div");
-  panel.className = "mt-3 flex animate-appear flex-wrap items-center gap-3 rounded-xl border border-line bg-surface-2 px-4 py-3.5";
-
-  const body = document.createElement("div");
-  body.className = "min-w-[190px] flex-1";
-  const title = document.createElement("p");
-  title.className = "text-sm font-bold tracking-[-0.025em] text-fg";
-  const text = document.createElement("p");
-  text.className = "mt-0.5 text-xs leading-[1.55] text-fg-2";
-  body.append(title, text);
-  panel.appendChild(body);
+function buildOptimizePanel(item: DownloadItem, conversion: ConversionState): { element: HTMLElement; bar: ProgressBarControl | null; percent: HTMLElement | null } {
+  const title = h("h4", { class: "optimize__title" });
+  const text = h("p", { class: "optimize__text" });
+  const element = h("div", { class: "optimize", role: "group", "aria-label": UI_STRINGS.optimizeTitle }, title, text);
+  let bar: ProgressBarControl | null = null;
+  let percent: HTMLElement | null = null;
 
   switch (conversion.phase) {
     case "offer":
-      title.textContent = UI_STRINGS.conversionTitle;
-      text.textContent = `O arquivo está em ${describeCodecs(conversion.report)} e o Premiere pode não importar. Converte para H.264 + AAC (MP4) usando ${conversion.report.encoder}.`;
-      panel.appendChild(buildConversionButton(UI_STRINGS.conversionConvert, "js-convert", false));
+      title.textContent = UI_STRINGS.optimizeTitle;
+      text.textContent = `Este arquivo está em ${describeCodecs(conversion.report)}, que nem todo programa, TV ou celular abre. Gere uma cópia MP4 (H.264 + AAC) compatível usando ${conversion.report.encoder}. O original continua intacto.`;
+      element.append(destinationRow(item), h("div", { class: "tapecard__actions" }, button({ label: UI_STRINGS.optimizeAction, icon: "sparkle", variant: "primary", size: "sm", onClick: () => void startOptimization(item.id) })));
       break;
 
     case "running": {
-      title.textContent = UI_STRINGS.conversionRunning;
+      title.textContent = `${UI_STRINGS.optimizeRunning}...`;
       text.textContent = conversion.report.encoder;
-
-      const pct = document.createElement("span");
-      pct.className = "shrink-0 font-mono text-lg leading-none font-bold text-accent";
-      pct.textContent = `${Math.round(conversion.percent)}%`;
-      panel.appendChild(pct);
-
-      const track = document.createElement("div");
-      track.className = "relative h-1.5 w-full basis-full overflow-hidden rounded-full bg-surface-3";
-      track.setAttribute("role", "progressbar");
-      track.setAttribute("aria-valuemin", "0");
-      track.setAttribute("aria-valuemax", "100");
-      track.setAttribute("aria-valuenow", String(Math.round(conversion.percent)));
-      const fill = document.createElement("div");
-      fill.className = PROGRESS_FILL_CLASS;
-      fill.style.width = `${conversion.percent}%`;
-      track.appendChild(fill);
-      panel.appendChild(track);
-      conversionRefs.set(item.id, { fill, track, pct });
-
-      panel.appendChild(buildConversionButton(UI_STRINGS.conversionCancel, "js-cancel-convert", true));
+      bar = progressBar("Progresso da otimização");
+      bar.set(conversion.percent);
+      percent = h("span", { class: "optimize__pct" }, `${Math.round(conversion.percent)}%`);
+      element.append(h("div", { class: "optimize__row" }, bar.element, percent, button({ label: UI_STRINGS.optimizeCancel, variant: "ghost", size: "sm", onClick: () => void cancelOptimization(item.id) })));
       break;
     }
 
     case "done":
-      title.textContent = UI_STRINGS.conversionDone;
-      text.className = "mt-0.5 font-mono text-xs leading-[1.55] break-all text-fg-2";
+      title.textContent = UI_STRINGS.optimizeDone;
+      text.className = "optimize__text mono";
       text.textContent = conversion.outputPath;
+      element.append(h("div", { class: "tapecard__actions" }, button({ label: UI_STRINGS.downloadOpenFolder, icon: "folder", variant: "secondary", size: "sm", onClick: () => void bridge.openPath(conversion.outputPath) })));
       break;
 
     case "failed":
-      title.textContent = UI_STRINGS.conversionFailed;
-      text.className = "mt-0.5 text-xs leading-[1.55] break-all text-red";
+      title.textContent = UI_STRINGS.optimizeFailed;
       text.textContent = conversion.error;
-      panel.appendChild(buildConversionButton(UI_STRINGS.conversionRetry, "js-convert", false));
+      text.style.color = "var(--red)";
+      element.append(h("div", { class: "tapecard__actions" }, button({ label: UI_STRINGS.optimizeRetry, icon: "refresh", variant: "secondary", size: "sm", onClick: () => void startOptimization(item.id) })));
       break;
   }
-  return panel;
+  return { element, bar, percent };
 }

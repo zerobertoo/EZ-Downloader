@@ -1,76 +1,35 @@
 import { bridge, type PlaylistItem, type StartDownloadOptions } from "./bridge";
-import { UI_STRINGS, elements, state } from "./state";
-import { errorMessage, looksLikePlaylist, parseUrlList, setUrlFieldValue, singleVideoUrlOf, urlFieldValue } from "./utils";
+import { setButtonBusy } from "./components/button";
+import { confirmDialog } from "./components/dialog";
+import { toast } from "./components/toast";
 import { type EnqueueParams } from "./downloads";
-import { clearFieldErrors, setFieldError, setFieldHint } from "./ui/feedback";
-import { clearScheduleField } from "./ui/mode-controls";
-import { render, setPhase } from "./ui/render";
+import { prefs } from "./prefs";
+import { UI_STRINGS, state } from "./state";
+import { errorMessage, looksLikePlaylist, parseUrlList, singleVideoUrlOf } from "./utils";
+import type { AdvancedOptions } from "./ui/advanced";
+import { refs } from "./ui/refs";
 import { enqueueEntries, openSelection, reportEnqueueFailures, type EnqueueFailure, type SelectionEntry } from "./ui/selection";
-
-/* ════════════════════════════════════════════════════════════════
-   DOWNLOAD — validação do formulário + enfileiramento
-   ════════════════════════════════════════════════════════════════ */
-
-/** Aceita MM:SS ou HH:MM:SS — mesma sintaxe do --download-sections do yt-dlp. */
-const TIME_PATTERN = /^\d{1,2}:\d{2}(:\d{2})?$/;
-
-/** Número com sufixo de unidade opcional — mesma sintaxe do --limit-rate do yt-dlp. */
-const RATE_PATTERN = /^\d+(\.\d+)?[KMG]?$/i;
 
 type EntryParamsBuilder = (entry: SelectionEntry) => EnqueueParams;
 
-/** Lê e valida os campos do Modo Avançado; devolve null (com o erro já exibido) se algum for inválido. */
-function readAdvancedOptions(): StartDownloadOptions | null {
-  const sectionStart = elements.sectionStart?.value.trim() || undefined;
-  const sectionEnd = elements.sectionEnd?.value.trim() || undefined;
-  if (Boolean(sectionStart) !== Boolean(sectionEnd)) {
-    setFieldError(elements.sectionError, UI_STRINGS.errorIncompleteSection);
-    return null;
-  }
-  if (
-    (sectionStart && !TIME_PATTERN.test(sectionStart)) ||
-    (sectionEnd && !TIME_PATTERN.test(sectionEnd))
-  ) {
-    setFieldError(elements.sectionError, UI_STRINGS.errorInvalidSection);
-    return null;
-  }
+let advanced: AdvancedOptions;
+let setPhaseHandler: (phase: typeof state.phase) => void = () => {};
+let renderHandler: () => void = () => {};
 
-  const limitRate = elements.limitRateInput?.value.trim() || undefined;
-  if (limitRate && !RATE_PATTERN.test(limitRate)) {
-    setFieldError(elements.limitRateError, UI_STRINGS.errorInvalidLimitRate);
-    return null;
-  }
+/** Liga as dependências que só existem depois da tela montada (evita import circular com app.ts). */
+export function bindDownloadDeps(deps: { advanced: AdvancedOptions; setPhase: (phase: typeof state.phase) => void; render: () => void }) {
+  advanced = deps.advanced;
+  setPhaseHandler = deps.setPhase;
+  renderHandler = deps.render;
+}
 
-  let scheduledAt: number | undefined;
-  const scheduleValue = elements.scheduleInput?.value;
-  if (scheduleValue) {
-    const timestamp = new Date(scheduleValue).getTime();
-    if (Number.isNaN(timestamp)) {
-      setFieldError(elements.scheduleError, UI_STRINGS.errorInvalidSchedule);
-      return null;
-    }
-    if (timestamp <= Date.now()) {
-      setFieldError(elements.scheduleError, UI_STRINGS.errorSchedulePast);
-      return null;
-    }
-    scheduledAt = Math.floor(timestamp / 1000);
-  }
+export function setUrlValue(value: string) {
+  refs.urlInput.value = value;
+  refs.urlInput.dispatchEvent(new Event("input", { bubbles: true }));
+}
 
-  return {
-    sectionStart,
-    sectionEnd,
-    subLangs: elements.subLangsCheckbox?.checked ? elements.subLangsInput?.value.trim() || undefined : undefined,
-    extraArgs: elements.extraArgsInput?.value.trim() || undefined,
-    cookiesBrowser: elements.cookiesBrowserSelect?.value || undefined,
-    limitRate,
-    nameTemplate: elements.nameTemplateInput?.value.trim() || undefined,
-    embedThumbnail: elements.embedThumbnailCheckbox?.checked || undefined,
-    embedChapters: elements.embedChaptersCheckbox?.checked || undefined,
-    embedMetadata: elements.embedMetadataCheckbox?.checked || undefined,
-    sponsorblock: (elements.sponsorblockSelect?.value as "remove" | "mark" | "") || undefined,
-    proxy: elements.proxyInput?.value.trim() || undefined,
-    scheduledAt,
-  };
+export function urlValue(): string {
+  return refs.urlInput.value.trim();
 }
 
 /** Se a checagem falhar, segue sem marcar duplicatas: ela é um aviso, não pode travar o download. */
@@ -79,33 +38,27 @@ async function withDuplicateFlags(items: Pick<PlaylistItem, "url" | "title" | "d
   try {
     duplicatePositions = await bridge.findDuplicates(items.map((item) => item.url));
   } catch (error) {
-    console.warn("Não foi possível checar duplicatas:", error);
+    console.warn("Failed to check duplicates:", error);
   }
   const duplicates = new Set(duplicatePositions);
   return items.map((item, index) => ({ ...item, duplicate: duplicates.has(index) }));
 }
 
-async function openPlaylistSelection(
-  url: string,
-  buildParams: EntryParamsBuilder,
-  onEnqueued: (failures: EnqueueFailure[]) => void,
-  cookiesBrowser?: string,
-  onSingleVideo?: () => void
-) {
-  setFieldHint(elements.urlError, UI_STRINGS.loadingPlaylist);
+async function openPlaylistSelection(url: string, buildParams: EntryParamsBuilder, onEnqueued: (failures: EnqueueFailure[]) => void, cookiesBrowser?: string, onSingleVideo?: () => void) {
+  refs.message.hint(UI_STRINGS.loadingPlaylist);
   let playlist;
   try {
     playlist = await bridge.getPlaylist(url, cookiesBrowser);
   } catch (error) {
-    console.error("Erro ao carregar playlist:", error);
-    setFieldError(elements.urlError, `${UI_STRINGS.errorFetchPlaylist} ${errorMessage(error)}`);
+    console.error("Failed to load playlist:", error);
+    refs.message.error(`${UI_STRINGS.errorFetchPlaylist} ${errorMessage(error)}`);
     return;
   }
   if (playlist.items.length === 0) {
-    setFieldError(elements.urlError, UI_STRINGS.errorEmptyPlaylist);
+    refs.message.error(UI_STRINGS.errorEmptyPlaylist);
     return;
   }
-  clearFieldErrors();
+  refs.message.clear();
   const entries = await withDuplicateFlags(playlist.items);
   openSelection({ heading: playlist.title || "Playlist", entries, buildParams, onEnqueued, onSingleVideo });
 }
@@ -115,68 +68,64 @@ function singleVideoAction(url: string, retry: () => void): (() => void) | undef
   const singleUrl = singleVideoUrlOf(url);
   if (!singleUrl) return undefined;
   return () => {
-    setUrlFieldValue(singleUrl);
+    setUrlValue(singleUrl);
     retry();
   };
 }
 
 /** Só limpa o campo quando tudo entrou: o que falhou continua lá para tentar de novo. */
-function clearUrlFieldIfAllEnqueued(failures: EnqueueFailure[]) {
+function clearUrlIfAllEnqueued(failures: EnqueueFailure[]) {
   if (failures.length > 0) return;
-  setUrlFieldValue("");
-  clearScheduleField();
+  setUrlValue("");
+  advanced.clearSchedule();
 }
 
-/** Deixa no campo só as URLs que falharam, para o usuário poder tentar de novo. */
 function keepFailedUrls(failures: EnqueueFailure[]) {
-  setUrlFieldValue(failures.map((failure) => failure.entry.url).join(" "));
+  setUrlValue(failures.map((failure) => failure.entry.url).join(" "));
 }
 
 /**
- * Playlist no Modo Avançado: não há um conjunto único de formatos, então abre a
- * seleção de itens e baixa cada um na melhor qualidade. As opções do painel só
- * são lidas se ele está visível (fase "ready"): com o painel escondido, um erro
- * de validação não teria onde aparecer.
+ * Playlist no Modo Avançado: não há um conjunto único de formatos, então abre a seleção
+ * e baixa cada item na melhor qualidade. As opções só são lidas com o painel visível (fase "ready").
  */
 export async function openAdvancedPlaylistSelection(url: string, retryAsSingleVideo: () => void) {
   const outputPath = state.downloadPath;
   if (!outputPath) {
-    setFieldError(elements.urlError, UI_STRINGS.errorNoPath);
+    refs.message.error(UI_STRINGS.errorNoPath);
     return;
   }
-  const options = state.phase === "ready" ? readAdvancedOptions() : {};
+  const options = state.phase === "ready" ? advanced.read() : {};
   if (!options) return;
 
-  setPhase("fetching");
+  setPhaseHandler("fetching");
   try {
     await openPlaylistSelection(
       url,
       (entry) => ({ url: entry.url, title: entry.title, format: "best", formatLabel: "MP4", outputPath, options }),
-      clearUrlFieldIfAllEnqueued,
+      clearUrlIfAllEnqueued,
       options.cookiesBrowser,
       singleVideoAction(url, retryAsSingleVideo)
     );
   } finally {
-    setPhase("idle");
+    setPhaseHandler("idle");
   }
 }
 
 let submitting = false;
 
+/** Modo Avançado, depois de escolher o formato: enfileira o vídeo carregado. */
 export async function handleDownload() {
   if (state.phase !== "ready" || !state.selectedFormat || submitting) return;
-
   if (!state.downloadPath) {
-    setFieldError(elements.pathError, UI_STRINGS.errorNoPath);
+    refs.message.error(UI_STRINGS.errorNoPath);
     return;
   }
-
-  const options = readAdvancedOptions();
+  const options: StartDownloadOptions | null = advanced.read();
   if (!options) return;
 
-  clearFieldErrors();
+  refs.message.clear();
   submitting = true;
-  if (elements.downloadBtn) elements.downloadBtn.disabled = true;
+  setButtonBusy(refs.downloadButton, true);
   try {
     const params: EnqueueParams = {
       url: state.currentUrl,
@@ -186,76 +135,71 @@ export async function handleDownload() {
       outputPath: state.downloadPath,
       options,
     };
-    const entries = await withDuplicateFlags([{ url: params.url, title: params.title, durationSeconds: null }]);
-    if (entries[0].duplicate) {
-      openSelection({ heading: UI_STRINGS.duplicateHeading, entries, buildParams: () => params });
-      return;
+    const [entry] = await withDuplicateFlags([{ url: params.url, title: params.title, durationSeconds: null }]);
+    if (entry.duplicate) {
+      const again = await confirmDialog({ title: UI_STRINGS.duplicateSingleTitle, body: UI_STRINGS.duplicateSingleBody, confirmLabel: UI_STRINGS.duplicateSingleConfirm });
+      if (!again) return;
     }
-    const failures = await enqueueEntries(entries, () => params);
+    const failures = await enqueueEntries([entry], () => params);
     reportEnqueueFailures(failures, 1);
-    if (failures.length === 0) clearScheduleField();
+    if (failures.length === 0) {
+      advanced.clearSchedule();
+      toast({ kind: "success", message: "Entrou na fila" });
+    }
   } catch (error) {
-    console.error("Erro ao iniciar download:", error);
-    setFieldError(elements.urlError, `${UI_STRINGS.errorStartDownload} ${errorMessage(error)}`);
+    console.error("Failed to start download:", error);
+    refs.message.error(`${UI_STRINGS.errorStartDownload} ${errorMessage(error)}`);
   } finally {
     submitting = false;
-    render();
+    setButtonBusy(refs.downloadButton, false);
+    renderHandler();
   }
 }
 
 let quickSubmitting = false;
 
-/** Modo Rápido: sem metadados prévios, dispara direto na melhor qualidade. Aceita vários links separados por espaço. */
+/** Modo Básico: colar e baixar numa única ação, na melhor qualidade, no formato escolhido. Aceita vários links. */
 export async function handleQuickDownload() {
   if (quickSubmitting) return;
 
-  const raw = urlFieldValue();
-  clearFieldErrors();
+  const raw = urlValue();
+  refs.message.clear();
 
   if (!raw) {
-    setFieldError(elements.urlError, UI_STRINGS.errorNoUrl);
+    refs.message.error(UI_STRINGS.errorNoUrl);
+    refs.urlInput.focus();
     return;
   }
   const { urls, invalid } = parseUrlList(raw);
   if (invalid.length > 0) {
-    const isList = urls.length + invalid.length > 1;
-    setFieldError(elements.urlError, isList ? UI_STRINGS.errorInvalidUrlInList : UI_STRINGS.errorInvalidUrl);
+    refs.message.error(urls.length + invalid.length > 1 ? UI_STRINGS.errorInvalidUrlInList : UI_STRINGS.errorInvalidUrl);
     return;
   }
-  // Sem esta checagem, um link de playlist no meio do lote baixaria a playlist inteira sem aviso.
   if (urls.length > 1 && urls.some(looksLikePlaylist)) {
-    setFieldError(elements.urlError, UI_STRINGS.errorPlaylistInBatch);
+    refs.message.error(UI_STRINGS.errorPlaylistInBatch);
     return;
   }
-  // Node de erro do Modo Avançado (#pathError) fica escondido no Modo Rápido —
-  // mostrar aqui, em #urlError, senão o clique falha em silêncio.
   const outputPath = state.downloadPath;
   if (!outputPath) {
-    setFieldError(elements.urlError, UI_STRINGS.errorNoPath);
+    refs.message.error(UI_STRINGS.errorNoPath);
     return;
   }
 
-  const isMp3 = state.quickFormat === "mp3";
+  const isMp3 = prefs.quickFormat === "mp3";
   const buildParams: EntryParamsBuilder = (entry) => ({
     url: entry.url,
     format: isMp3 ? "quick-mp3" : "quick-mp4",
-    formatLabel: isMp3 ? "Áudio (MP3)" : "Vídeo (MP4)",
+    formatLabel: isMp3 ? "MP3" : "MP4",
     title: entry.title,
     outputPath,
     options: {},
   });
 
   quickSubmitting = true;
-  if (elements.quickDownloadBtn) elements.quickDownloadBtn.disabled = true;
+  setButtonBusy(refs.goButton, true);
   try {
     if (urls.length === 1 && looksLikePlaylist(urls[0])) {
-      await openPlaylistSelection(
-        urls[0],
-        buildParams,
-        clearUrlFieldIfAllEnqueued,
-        undefined,
-        singleVideoAction(urls[0], () => void handleQuickDownload())
-      );
+      await openPlaylistSelection(urls[0], buildParams, clearUrlIfAllEnqueued, undefined, singleVideoAction(urls[0], () => void handleQuickDownload()));
       return;
     }
     const entries = await withDuplicateFlags(urls.map((url) => ({ url, title: null, durationSeconds: null })));
@@ -264,13 +208,21 @@ export async function handleQuickDownload() {
       return;
     }
     const failures = await enqueueEntries(entries, buildParams);
+    keepFailedUrls(failures);
     reportEnqueueFailures(failures, entries.length);
-    if (failures.length < entries.length) keepFailedUrls(failures);
+    if (failures.length < entries.length) confirmSent(entries.length - failures.length);
   } catch (error) {
-    console.error("Erro ao iniciar download:", error);
-    setFieldError(elements.urlError, `${UI_STRINGS.errorStartDownload} ${errorMessage(error)}`);
+    console.error("Failed to start download:", error);
+    refs.message.error(`${UI_STRINGS.errorStartDownload} ${errorMessage(error)}`);
   } finally {
     quickSubmitting = false;
-    if (elements.quickDownloadBtn) elements.quickDownloadBtn.disabled = false;
+    setButtonBusy(refs.goButton, false);
   }
+}
+
+/** A tecla fica verde por um instante: confirma o envio sem exigir um aviso a mais na tela. */
+function confirmSent(count: number) {
+  refs.goButton.classList.add("is-success");
+  setTimeout(() => refs.goButton.classList.remove("is-success"), 900);
+  if (count > 1) toast({ kind: "success", message: `${count} links entraram na fila` });
 }

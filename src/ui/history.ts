@@ -1,201 +1,112 @@
 import { bridge, type HistoryEntry } from "../bridge";
-import { enqueueDownload } from "../downloads";
-import { UI_STRINGS, elements } from "../state";
-import { errorMessage, friendlyErrorMessage, toggle } from "../utils";
-import { setFieldError } from "./feedback";
-
-/* ════════════════════════════════════════════════════════════════
-   HISTÓRICO — lista persistente de downloads finalizados
-   ════════════════════════════════════════════════════════════════ */
+import { button } from "../components/button";
+import { confirmDialog } from "../components/dialog";
+import { h } from "../components/dom";
+import { icon, type IconName } from "../components/icons";
+import { toast } from "../components/toast";
+import { enqueueDownload, formatLabelFor } from "../downloads";
+import { UI_STRINGS } from "../state";
+import { errorMessage, friendlyErrorMessage } from "../utils";
+import { refs } from "./refs";
 
 const STATUS_LABEL: Record<HistoryEntry["status"], string> = {
   done: UI_STRINGS.statusDone,
   failed: UI_STRINGS.statusFailed,
   cancelled: UI_STRINGS.statusCancelled,
 };
+const STATUS_ICON: Record<HistoryEntry["status"], IconName> = { done: "check", failed: "x", cancelled: "minus" };
+
+let allEntries: HistoryEntry[] = [];
+// Downloads que terminam quase juntos disparam loadHistory() concorrente: sem isto, uma resposta lenta sobrescreve o render com dado velho.
+let loadGeneration = 0;
 
 export function initHistoryUI() {
-  elements.historyToggleBtn?.addEventListener("click", () => {
-    const collapsed = elements.historyBody?.classList.contains("hidden") ?? true;
-    toggle(elements.historyBody, collapsed);
-    elements.historyToggleBtn?.setAttribute("aria-expanded", String(collapsed));
-  });
-
-  elements.clearHistoryBtn?.addEventListener("click", () => void handleClearHistoryClick());
-  elements.clearHistoryBtn?.addEventListener("blur", resetClearHistoryButton);
-
-  elements.historySearchInput?.addEventListener("input", () => {
-    renderHistory(filterEntries(allEntries, elements.historySearchInput?.value ?? ""));
-  });
-
-  elements.historyList?.addEventListener("click", (e) => {
-    const target = e.target as HTMLElement;
-    const row = target.closest<HTMLElement>("[data-history-path]");
-    if (row && target.closest(".js-open-folder")) {
-      bridge.openPath(row.dataset.historyPath!).catch((error) => {
-        console.error("Erro ao abrir pasta:", error);
-        setFieldError(elements.urlError, UI_STRINGS.errorOpenFolder);
-      });
-    }
-  });
+  refs.historySearch.addEventListener("input", () => render());
+  refs.historyClear.addEventListener("click", () => void handleClear());
 }
-
-// Confirmação em dois cliques no próprio botão — sem window.confirm(), que
-// quebra o visual escuro do app com um diálogo nativo do SO.
-const CLEAR_CONFIRM_TIMEOUT_MS = 3000;
-let clearConfirmTimer: ReturnType<typeof setTimeout> | null = null;
-
-function resetClearHistoryButton() {
-  if (clearConfirmTimer) {
-    clearTimeout(clearConfirmTimer);
-    clearConfirmTimer = null;
-  }
-  const btn = elements.clearHistoryBtn;
-  if (!btn) return;
-  btn.classList.remove("is-confirming");
-  btn.textContent = UI_STRINGS.historyClear;
-}
-
-async function handleClearHistoryClick() {
-  const btn = elements.clearHistoryBtn;
-  if (!btn) return;
-
-  if (!btn.classList.contains("is-confirming")) {
-    btn.classList.add("is-confirming");
-    btn.textContent = UI_STRINGS.historyClearConfirmLabel;
-    clearConfirmTimer = setTimeout(resetClearHistoryButton, CLEAR_CONFIRM_TIMEOUT_MS);
-    return;
-  }
-
-  resetClearHistoryButton();
-  try {
-    await bridge.clearHistory();
-    allEntries = [];
-    renderHistory([]);
-  } catch (error) {
-    console.error("Erro ao limpar histórico:", error);
-    setFieldError(elements.urlError, UI_STRINGS.errorClearHistory);
-  }
-}
-
-// Downloads que terminam quase juntos disparam loadHistory() concorrente;
-// sem isso, uma resposta mais lenta pode sobrescrever o render com dado velho.
-let loadGeneration = 0;
-let allEntries: HistoryEntry[] = [];
 
 export async function loadHistory() {
   const generation = ++loadGeneration;
   const entries = await bridge.getHistory();
   if (generation !== loadGeneration) return;
   allEntries = entries;
-  renderHistory(filterEntries(entries, elements.historySearchInput?.value ?? ""));
+  render();
 }
 
-/** Busca simples por substring em título e URL — histórico já vem inteiro do backend. */
-function filterEntries(entries: HistoryEntry[], query: string): HistoryEntry[] {
-  const q = query.trim().toLowerCase();
-  if (!q) return entries;
-  return entries.filter(
-    (e) => (e.title || "").toLowerCase().includes(q) || e.url.toLowerCase().includes(q)
-  );
+function visibleEntries(): HistoryEntry[] {
+  const query = refs.historySearch.value.trim().toLowerCase();
+  if (!query) return allEntries;
+  return allEntries.filter((entry) => (entry.title || "").toLowerCase().includes(query) || entry.url.toLowerCase().includes(query));
 }
 
-function renderHistory(entries: HistoryEntry[]) {
-  if (!elements.historyList) return;
+function render() {
+  const entries = visibleEntries();
+  const searching = Boolean(refs.historySearch.value.trim());
+  refs.historyEmpty.classList.toggle("is-hidden", entries.length > 0);
+  refs.historyEmpty.textContent = searching && allEntries.length > 0 ? UI_STRINGS.historyNoResults : UI_STRINGS.historyEmpty;
+  refs.historyClear.classList.toggle("is-hidden", allEntries.length === 0);
+  refs.historyList.replaceChildren(...entries.map(buildRow));
+}
 
-  const searching = Boolean(elements.historySearchInput?.value.trim());
-  toggle(elements.historyEmpty, entries.length === 0);
-  if (elements.historyEmpty) {
-    elements.historyEmpty.textContent =
-      searching && allEntries.length > 0 ? UI_STRINGS.historyNoResults : UI_STRINGS.historyEmpty;
+async function handleClear() {
+  const confirmed = await confirmDialog({
+    title: "Limpar o histórico?",
+    body: "A lista de downloads anteriores será apagada. Os arquivos baixados não são tocados.",
+    confirmLabel: "Limpar histórico",
+    danger: true,
+  });
+  if (!confirmed) return;
+  try {
+    await bridge.clearHistory();
+    allEntries = [];
+    render();
+  } catch (error) {
+    console.error("Failed to clear history:", error);
+    toast({ kind: "error", message: UI_STRINGS.errorClearHistory });
   }
-  elements.historyList.innerHTML = "";
-
-  for (const entry of entries) {
-    elements.historyList.appendChild(buildRow(entry));
-  }
 }
-
-const HISTORY_BTN = "btn-secondary h-7 shrink-0 px-3 text-[0.7rem] pointer-coarse:min-h-11";
-
-const HISTORY_ICON_CLASS: Record<HistoryEntry["status"], string> = {
-  done: "bg-green-dim text-green",
-  failed: "bg-red-dim text-red",
-  cancelled: "bg-surface-3 text-fg-3",
-};
 
 function buildRow(entry: HistoryEntry): HTMLElement {
-  const row = document.createElement("div");
-  row.className = "flex items-center gap-3 rounded-xl border border-line bg-surface-2 px-3 py-2.5";
-  if (entry.outputPath) row.dataset.historyPath = entry.outputPath;
+  const date = new Date(entry.finishedAt).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" });
+  const body = h(
+    "div",
+    { class: "hrow__body" },
+    h("div", { class: "hrow__title", title: entry.title || entry.url }, entry.title || entry.url),
+    h("div", { class: "hrow__meta" }, `${STATUS_LABEL[entry.status]} · ${entry.format} · ${date}`),
+    entry.status === "failed" && entry.error ? h("div", { class: "hrow__error" }, friendlyErrorMessage(entry.error)) : null
+  );
 
-  const icon = document.createElement("span");
-  icon.className = `flex size-[22px] shrink-0 items-center justify-center rounded-full ${HISTORY_ICON_CLASS[entry.status]}`;
-  icon.setAttribute("aria-hidden", "true");
-  icon.innerHTML =
-    entry.status === "done"
-      ? `<svg width="11" height="11" viewBox="0 0 24 24" fill="none"><path d="M20 6L9 17l-5-5" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>`
-      : entry.status === "failed"
-        ? `<svg width="10" height="10" viewBox="0 0 24 24" fill="none"><line x1="18" y1="6" x2="6" y2="18" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/><line x1="6" y1="6" x2="18" y2="18" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/></svg>`
-        : `<svg width="10" height="10" viewBox="0 0 24 24" fill="none"><line x1="5" y1="12" x2="19" y2="12" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/></svg>`;
-  row.appendChild(icon);
-
-  const body = document.createElement("div");
-  body.className = "min-w-0 flex-1";
-  const title = document.createElement("p");
-  title.className = "truncate text-[0.8125rem] font-semibold text-fg";
-  title.textContent = entry.title || entry.url;
-  body.appendChild(title);
-  const meta = document.createElement("p");
-  meta.className = "font-mono text-[0.6875rem] text-fg-3";
-  const date = new Date(entry.finishedAt).toLocaleString("pt-BR");
-  meta.textContent = `${STATUS_LABEL[entry.status]} • ${entry.format} • ${date}`;
-  body.appendChild(meta);
-
-  if (entry.status === "failed" && entry.error) {
-    const errorText = document.createElement("p");
-    errorText.className = "mt-0.5 text-[0.6875rem] text-red";
-    errorText.textContent = friendlyErrorMessage(entry.error);
-    body.appendChild(errorText);
-  }
-
-  row.appendChild(body);
+  const row = h("div", { class: "hrow" }, h("span", { class: ["hrow__icon", `hrow__icon--${entry.status}`] }, icon(STATUS_ICON[entry.status], 14)), body);
 
   if (entry.status === "done") {
-    const openBtn = document.createElement("button");
-    openBtn.className = `${HISTORY_BTN} js-open-folder`;
-    openBtn.textContent = UI_STRINGS.downloadOpenFolder;
-    row.appendChild(openBtn);
+    row.appendChild(button({ label: UI_STRINGS.downloadOpenFolder, icon: "folder", variant: "secondary", size: "sm", onClick: () => void openFolder(entry) }));
+  } else {
+    const retry = button({ label: UI_STRINGS.downloadRetry, icon: "refresh", variant: "secondary", size: "sm" });
+    retry.addEventListener("click", () => void retryEntry(entry, retry));
+    row.appendChild(retry);
   }
-
-  if (entry.status === "failed" || entry.status === "cancelled") {
-    const retryBtn = document.createElement("button");
-    retryBtn.className = HISTORY_BTN;
-    retryBtn.textContent = UI_STRINGS.downloadRetry;
-    retryBtn.addEventListener("click", () => void handleHistoryRetry(entry, retryBtn));
-    row.appendChild(retryBtn);
-  }
-
   return row;
 }
 
-/** Retentativa a partir do histórico só reconstrói o essencial (url/formato/destino) —
- * corte, legendas e argumentos extras não são persistidos entre sessões. */
-async function handleHistoryRetry(entry: HistoryEntry, btn: HTMLButtonElement) {
-  btn.disabled = true;
+async function openFolder(entry: HistoryEntry) {
   try {
-    await enqueueDownload({
-      url: entry.url,
-      format: entry.format,
-      formatLabel: entry.format,
-      title: entry.title,
-      outputPath: entry.outputPath,
-      options: {},
-    });
+    await bridge.openPath(entry.outputPath);
   } catch (error) {
-    console.error("Erro ao reenviar download:", error);
-    setFieldError(elements.urlError, `${UI_STRINGS.errorStartDownload} ${errorMessage(error)}`);
+    console.error("Failed to open folder:", error);
+    toast({ kind: "error", message: UI_STRINGS.errorOpenFolder });
+  }
+}
+
+/** Retentativa pelo histórico reconstrói só o essencial (link, formato, destino): as opções avançadas não são guardadas. */
+async function retryEntry(entry: HistoryEntry, trigger: HTMLButtonElement) {
+  trigger.disabled = true;
+  try {
+    await enqueueDownload({ url: entry.url, format: entry.format, formatLabel: formatLabelFor(entry.format), title: entry.title, outputPath: entry.outputPath, options: {} });
+    toast({ kind: "success", message: "Voltou para a fila" });
+  } catch (error) {
+    console.error("Failed to resubmit download:", error);
+    toast({ kind: "error", message: `${UI_STRINGS.errorStartDownload} ${errorMessage(error)}` });
   } finally {
-    btn.disabled = false;
+    trigger.disabled = false;
   }
 }

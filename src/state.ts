@@ -1,75 +1,79 @@
 import type { FormatOption, MediaReport, StartDownloadOptions } from "./bridge";
 
 export const UI_STRINGS = {
-  errorNoUrl: "Por favor, insira uma URL",
-  errorInvalidUrl: "URL inválida. Insira uma URL completa (ex: https://youtube.com/...)",
+  errorNoUrl: "Cole um link para começar",
+  errorInvalidUrl: "Esse link não parece válido. Use o endereço completo, começando com https://",
   errorNoFormats: "Nenhum formato disponível para este vídeo",
-  errorFetchFormats: "Erro ao buscar formatos:",
-  errorNoPath: "Por favor, selecione um diretório de download",
+  errorFetchFormats: "Não foi possível buscar os formatos:",
+  errorNoPath: "Escolha uma pasta de destino antes de baixar",
   errorIncompleteSection: "Preencha início e fim do corte, ou deixe os dois em branco",
-  errorInvalidSection: "Formato de tempo inválido. Use HH:MM:SS (ex: 00:01:30)",
-  errorInvalidLimitRate: "Formato inválido, use um número com sufixo opcional K/M/G (ex: 2M, 500K)",
+  errorInvalidSection: "Tempo inválido. Use HH:MM:SS (ex: 00:01:30)",
+  errorInvalidLimitRate: "Formato inválido. Use um número com K, M ou G (ex: 2M, 500K)",
   errorInvalidSchedule: "Data e hora inválidas",
-  errorSchedulePast: "O horário agendado já passou",
+  errorSchedulePast: "Esse horário já passou",
   errorPresetName: "Dê um nome ao preset",
   errorPresetSave: "Não foi possível salvar o preset:",
   errorPresetDelete: "Não foi possível excluir o preset:",
   errorProxySave: "Não foi possível salvar o proxy:",
   statusScheduled: "Agendado para",
-  hintPlaylist: "URL de playlist detectada, você poderá escolher os itens",
-  hintBatch: "links detectados, todos serão enfileirados",
-  errorInvalidUrlInList: "Um dos itens da lista não é uma URL válida",
-  errorPlaylistInBatch: "Links de playlist devem ser colados sozinhos. Para vários vídeos, cole os links de cada vídeo",
+  hintPlaylist: "Link de playlist: você poderá escolher os itens",
+  hintBatch: "links detectados, todos entram na fila",
+  errorInvalidUrlInList: "Um dos itens da lista não é um link válido",
+  errorPlaylistInBatch: "Cole links de playlist sozinhos. Para vários vídeos, cole o link de cada um",
   errorClipboardToggle: "Não foi possível alterar o monitor da área de transferência",
   errorBatchNeedsBasicMode: "Para baixar vários links de uma vez, use o modo Básico",
   loadingPlaylist: "Carregando playlist...",
-  errorFetchPlaylist: "Erro ao carregar a playlist:",
+  errorFetchPlaylist: "Não foi possível carregar a playlist:",
   errorEmptyPlaylist: "Nenhum item encontrado nesta playlist",
-  errorEnqueuePartial: "Não foi possível enfileirar alguns itens:",
+  errorEnqueuePartial: "Alguns itens não entraram na fila:",
   duplicateHeading: "Links já baixados ou na fila",
+  duplicateSingleTitle: "Você já baixou este link",
+  duplicateSingleBody: "Ele já foi baixado ou está na fila. Quer baixar de novo?",
+  duplicateSingleConfirm: "Baixar de novo",
   selectionDownload: "Baixar",
   selectionSelected: "selecionados",
-  selectionDuplicateBadge: "Já baixado ou na fila",
+  selectionDuplicateBadge: "Já baixado",
   selectionDuplicateNote: "Itens já baixados ou na fila começam desmarcados.",
   clipboardUse: "Usar link",
-  errorSelectDir: "Erro ao selecionar diretório",
-  errorOpenFolder: "Erro ao abrir pasta de downloads",
-  errorCancel: "Erro ao cancelar download",
-  errorClearHistory: "Erro ao limpar histórico",
-  errorInit: "Erro ao inicializar a aplicação",
-  errorStartDownload: "Erro ao iniciar download:",
-  hintUrlChanged: "URL alterada. Aperte Buscar para carregar este vídeo",
-  progressStarting: "Iniciando download...",
-  progressDownloading: "Baixando...",
-  progressFinalizing: "Finalizando...",
-  progressComplete: "Download concluído!",
+  errorSelectDir: "Não foi possível escolher a pasta",
+  errorOpenFolder: "Não foi possível abrir a pasta",
+  errorCancel: "Não foi possível cancelar o download",
+  errorClearHistory: "Não foi possível limpar o histórico",
+  errorInit: "Erro ao iniciar o aplicativo",
+  errorStartDownload: "Não foi possível iniciar o download:",
+  errorMaxConcurrent: "Não foi possível alterar o limite de downloads simultâneos",
+  hintUrlChanged: "O link mudou. Toque em Buscar para carregar este vídeo",
+  progressStarting: "Iniciando",
+  progressDownloading: "Baixando",
+  progressFinalizing: "Finalizando",
+  progressComplete: "Concluído",
   statusDone: "Concluído",
   statusFailed: "Falhou",
   statusCancelled: "Cancelado",
   statusQueued: "Na fila",
   statusPaused: "Pausado",
   downloadPrioritize: "Priorizar",
-  errorMaxConcurrent: "Não foi possível alterar o limite de downloads simultâneos",
   downloadPause: "Pausar",
   downloadResume: "Retomar",
+  downloadCancel: "Cancelar",
   historyTitle: "Histórico",
   historyEmpty: "Nenhum download ainda",
   historyNoResults: "Nenhum resultado para a busca",
   historyClear: "Limpar histórico",
-  historyClearConfirmLabel: "Confirmar?",
-  downloadRemove: "Remover",
-  downloadRetry: "Tentar novamente",
+  downloadRemove: "Remover da lista",
+  downloadRetry: "Tentar de novo",
   downloadOpenFolder: "Abrir pasta",
-  conversionTitle: "Compatibilidade com editores",
-  conversionConvert: "Converter para H.264",
-  conversionRunning: "Convertendo para H.264...",
-  conversionDone: "Convertido para H.264",
-  conversionFailed: "Não foi possível converter",
-  conversionCancel: "Cancelar",
-  conversionRetry: "Tentar novamente",
+  optimizeTitle: "Otimizar compatibilidade",
+  optimizeAction: "Otimizar",
+  optimizeRunning: "Otimizando",
+  optimizeDone: "Cópia otimizada pronta",
+  optimizeFailed: "Não foi possível otimizar",
+  optimizeCancel: "Cancelar",
+  optimizeRetry: "Tentar de novo",
+  optimizeBesideOriginal: "Ao lado do original",
 };
 
-/** Conversão pós-download para H.264/AAC (MP4), oferecida só quando o codec baixado é problemático. */
+/** Otimização pós-download (cópia H.264 + AAC em MP4), oferecida só quando o codec baixado costuma dar problema. */
 export type ConversionState =
   | { phase: "offer"; report: MediaReport }
   | { phase: "running"; report: MediaReport; percent: number }
@@ -82,16 +86,16 @@ export interface VideoMetadata {
   uploader: string | null;
 }
 
-/**
- * Fase do FORMULÁRIO — não do download em si (downloads viraram itens
- * concorrentes em `state.downloads`, veja downloads.ts). A tela é única e
- * progressiva, cada região aparece conforme a fase.
- */
+/** Fase do formulário do Modo Avançado (os downloads em si vivem em `state.downloads`). */
 export type Phase = "idle" | "fetching" | "ready";
 
 export const PATH_STORAGE_KEY = "ez-download-path";
 
-/** Um item da fila de downloads da sessão — do enfileiramento até o fim. */
+export interface DebugEntry {
+  stream: "stdout" | "stderr";
+  text: string;
+}
+
 export interface DownloadItem {
   id: string;
   url: string;
@@ -105,11 +109,13 @@ export interface DownloadItem {
   speed: string | null;
   eta: string | null;
   error: string | null;
-  /** Pasta de destino. */
   resultPath: string | null;
-  /** Arquivo final baixado (usado na conversão). */
   filePath: string | null;
   conversion: ConversionState | null;
+  /** Pasta escolhida para a cópia otimizada; null grava ao lado do original. */
+  optimizeDir: string | null;
+  debugCommand: string | null;
+  debugLines: DebugEntry[];
 }
 
 export const state = {
@@ -119,92 +125,5 @@ export const state = {
   downloadPath: null as string | null,
   formats: [] as FormatOption[],
   videoMetadata: { title: null, thumbnail: null, uploader: null } as VideoMetadata,
-  quickFormat: "mp4" as "mp4" | "mp3",
-  nerdMode: false,
-  debugLines: [] as { stream: "stdout" | "stderr"; text: string }[],
-  /** Id do último download iniciado — o painel Nerd só mostra o log dele. */
-  debugDownloadId: null as string | null,
-  /** Fila de downloads da sessão, mais recente por último (renderizado invertido). */
   downloads: new Map<string, DownloadItem>(),
-};
-
-export const elements = {
-  app: document.getElementById("app"),
-  urlInput: document.getElementById("urlInput") as HTMLInputElement | null,
-  playlistHint: document.getElementById("playlistHint"),
-  fetchFormatsBtn: document.getElementById("fetchFormatsBtn") as HTMLButtonElement | null,
-  urlError: document.getElementById("urlError"),
-  loadingRegion: document.getElementById("loadingRegion"),
-  videoCard: document.getElementById("videoCard"),
-  videoThumbnail: document.getElementById("videoThumbnail") as HTMLImageElement | null,
-  videoTitle: document.getElementById("videoTitle"),
-  videoUploader: document.getElementById("videoUploader"),
-  configCard: document.getElementById("configCard"),
-  formatSelect: document.getElementById("formatSelect") as HTMLSelectElement | null,
-  formatInfo: document.getElementById("formatInfo"),
-  downloadPath: document.getElementById("downloadPath") as HTMLInputElement | null,
-  selectPathBtn: document.getElementById("selectPathBtn") as HTMLButtonElement | null,
-  pathError: document.getElementById("pathError"),
-  downloadBtn: document.getElementById("downloadBtn") as HTMLButtonElement | null,
-  version: document.getElementById("version"),
-  themeToggleBtn: document.getElementById("themeToggleBtn") as HTMLButtonElement | null,
-  themePopover: document.getElementById("themePopover"),
-  modeToggleBtn: document.getElementById("modeToggleBtn") as HTMLButtonElement | null,
-  modeToggleLabel: document.getElementById("modeToggleLabel"),
-  quickMp4Btn: document.getElementById("quickMp4Btn") as HTMLButtonElement | null,
-  quickMp3Btn: document.getElementById("quickMp3Btn") as HTMLButtonElement | null,
-  quickDownloadBtn: document.getElementById("quickDownloadBtn") as HTMLButtonElement | null,
-  sectionStart: document.getElementById("sectionStart") as HTMLInputElement | null,
-  sectionEnd: document.getElementById("sectionEnd") as HTMLInputElement | null,
-  sectionError: document.getElementById("sectionError"),
-  subLangsCheckbox: document.getElementById("subLangsCheckbox") as HTMLInputElement | null,
-  subLangsInput: document.getElementById("subLangsInput") as HTMLInputElement | null,
-  extraArgsInput: document.getElementById("extraArgsInput") as HTMLInputElement | null,
-  cookiesBrowserSelect: document.getElementById("cookiesBrowserSelect") as HTMLSelectElement | null,
-  limitRateInput: document.getElementById("limitRateInput") as HTMLInputElement | null,
-  limitRateError: document.getElementById("limitRateError"),
-  presetSelect: document.getElementById("presetSelect") as HTMLSelectElement | null,
-  presetNameInput: document.getElementById("presetNameInput") as HTMLInputElement | null,
-  presetSaveBtn: document.getElementById("presetSaveBtn") as HTMLButtonElement | null,
-  presetDeleteBtn: document.getElementById("presetDeleteBtn") as HTMLButtonElement | null,
-  presetError: document.getElementById("presetError"),
-  nameTemplateInput: document.getElementById("nameTemplateInput") as HTMLInputElement | null,
-  embedThumbnailCheckbox: document.getElementById("embedThumbnailCheckbox") as HTMLInputElement | null,
-  embedChaptersCheckbox: document.getElementById("embedChaptersCheckbox") as HTMLInputElement | null,
-  embedMetadataCheckbox: document.getElementById("embedMetadataCheckbox") as HTMLInputElement | null,
-  sponsorblockSelect: document.getElementById("sponsorblockSelect") as HTMLSelectElement | null,
-  proxyInput: document.getElementById("proxyInput") as HTMLInputElement | null,
-  proxySaveDefaultBtn: document.getElementById("proxySaveDefaultBtn") as HTMLButtonElement | null,
-  proxyError: document.getElementById("proxyError"),
-  scheduleInput: document.getElementById("scheduleInput") as HTMLInputElement | null,
-  scheduleError: document.getElementById("scheduleError"),
-  nerdModeBtn: document.getElementById("nerdModeBtn") as HTMLButtonElement | null,
-  clipboardMonitorBtn: document.getElementById("clipboardMonitorBtn") as HTMLButtonElement | null,
-  clipboardOffer: document.getElementById("clipboardOffer"),
-  clipboardOfferUrl: document.getElementById("clipboardOfferUrl"),
-  clipboardUseBtn: document.getElementById("clipboardUseBtn") as HTMLButtonElement | null,
-  clipboardDismissBtn: document.getElementById("clipboardDismissBtn") as HTMLButtonElement | null,
-  selectionPanel: document.getElementById("selectionPanel"),
-  selectionHeading: document.getElementById("selectionHeading"),
-  selectionCount: document.getElementById("selectionCount"),
-  selectionNote: document.getElementById("selectionNote"),
-  selectionList: document.getElementById("selectionList"),
-  selectionAllBtn: document.getElementById("selectionAllBtn") as HTMLButtonElement | null,
-  selectionNoneBtn: document.getElementById("selectionNoneBtn") as HTMLButtonElement | null,
-  selectionSingleBtn: document.getElementById("selectionSingleBtn") as HTMLButtonElement | null,
-  selectionConfirmBtn: document.getElementById("selectionConfirmBtn") as HTMLButtonElement | null,
-  selectionCancelBtn: document.getElementById("selectionCancelBtn") as HTMLButtonElement | null,
-  debugPanel: document.getElementById("debugPanel"),
-  debugCommand: document.getElementById("debugCommand"),
-  debugLog: document.getElementById("debugLog"),
-  downloadsSection: document.getElementById("downloadsSection"),
-  downloadsList: document.getElementById("downloadsList"),
-  maxConcurrentSelect: document.getElementById("maxConcurrentSelect") as HTMLSelectElement | null,
-  historySection: document.getElementById("historySection"),
-  historyToggleBtn: document.getElementById("historyToggleBtn") as HTMLButtonElement | null,
-  historyBody: document.getElementById("historyBody"),
-  historySearchInput: document.getElementById("historySearchInput") as HTMLInputElement | null,
-  historyList: document.getElementById("historyList"),
-  historyEmpty: document.getElementById("historyEmpty"),
-  clearHistoryBtn: document.getElementById("clearHistoryBtn") as HTMLButtonElement | null,
 };

@@ -1,26 +1,7 @@
-import { currentMode } from "./mode";
-import { UI_STRINGS, elements } from "./state";
-
-/* ════════════════════════════════════════════════════════════════
-   UTILITÁRIOS
-   ════════════════════════════════════════════════════════════════ */
+import { UI_STRINGS } from "./state";
 
 export function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
-}
-
-export function toggle(element: Element | null, visible: boolean) {
-  element?.classList.toggle("hidden", !visible);
-}
-
-export function urlFieldValue(): string {
-  return elements.urlInput?.value.trim() ?? "";
-}
-
-export function setUrlFieldValue(value: string) {
-  if (!elements.urlInput) return;
-  elements.urlInput.value = value;
-  elements.urlInput.dispatchEvent(new Event("input", { bubbles: true }));
 }
 
 export function isValidUrl(value: string): boolean {
@@ -81,33 +62,26 @@ export function singleVideoUrlOf(url: string): string | null {
   }
 }
 
-export function renderPlaylistHint() {
-  if (!elements.playlistHint) return;
-  const value = urlFieldValue();
+/** Texto da dica sob a barra de comando, ou null quando não há o que dizer. */
+export function urlHintFor(value: string, mode: "basic" | "advanced"): string | null {
   const { urls } = parseUrlList(value);
   const isBatch = /\s/.test(value) && urls.length > 1;
-  const isPlaylist = !isBatch && looksLikePlaylist(value);
-  toggle(elements.playlistHint, isBatch || isPlaylist);
-  if (isBatch && currentMode() === "advanced") {
-    elements.playlistHint.textContent = UI_STRINGS.errorBatchNeedsBasicMode;
-  } else if (isBatch) {
-    elements.playlistHint.textContent = `${urls.length} ${UI_STRINGS.hintBatch}`;
-  } else if (isPlaylist) {
-    elements.playlistHint.textContent = UI_STRINGS.hintPlaylist;
-  }
+  if (isBatch && mode === "advanced") return UI_STRINGS.errorBatchNeedsBasicMode;
+  if (isBatch) return `${urls.length} ${UI_STRINGS.hintBatch}`;
+  if (looksLikePlaylist(value)) return UI_STRINGS.hintPlaylist;
+  return null;
 }
 
-/** Mapeia trechos comuns de erro do yt-dlp pra uma explicação em português —
- * o texto bruto (stderr) fica disponível à parte, não substituído. */
+/** Mapeia trechos comuns de erro do yt-dlp para uma explicação em português; o texto bruto fica à parte. */
 const ERROR_PATTERNS: [RegExp, string][] = [
   [/private video/i, "Este vídeo é privado e não pode ser baixado."],
-  [/video (is )?unavailable|has been removed/i, "Vídeo indisponível, pode ter sido removido ou não existir mais."],
-  [/sign in to confirm your age|age[- ]restrict/i, "Vídeo com restrição de idade, requer login para baixar."],
-  [/not available in your country|geo.?restrict/i, "Vídeo bloqueado nessa região (restrição geográfica)."],
-  [/429|too many requests/i, "Muitas requisições ao serviço. Aguarde um pouco antes de tentar de novo."],
+  [/video (is )?unavailable|has been removed/i, "Vídeo indisponível: pode ter sido removido ou não existir mais."],
+  [/sign in to confirm your age|age[- ]restrict/i, "Vídeo com restrição de idade: exige login para baixar."],
+  [/not available in your country|geo.?restrict/i, "Vídeo bloqueado nesta região."],
+  [/429|too many requests/i, "Muitas requisições ao serviço. Espere um pouco e tente de novo."],
   [/cookies|login required/i, "O site exige login (cookies) para baixar este conteúdo."],
   [/unsupported url|no extractor/i, "Este link não é suportado pelo yt-dlp."],
-  [/network|timed? ?out|connection/i, "Falha de conexão. Verifique sua internet e tente de novo."],
+  [/network|timed? ?out|connection/i, "Falha de conexão. Verifique a internet e tente de novo."],
 ];
 
 export function friendlyErrorMessage(raw: string): string {

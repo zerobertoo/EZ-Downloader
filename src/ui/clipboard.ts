@@ -1,27 +1,21 @@
 import { readText } from "@tauri-apps/plugin-clipboard-manager";
 import { bridge } from "../bridge";
-import { UI_STRINGS, elements } from "../state";
-import { isHttpUrl, setUrlFieldValue, toggle, urlFieldValue } from "../utils";
-import { setFieldError } from "./feedback";
+import { setUrlValue, urlValue } from "../download";
+import { UI_STRINGS } from "../state";
+import { isHttpUrl } from "../utils";
+import { toast } from "../components/toast";
+import { refs } from "./refs";
 
 let monitorEnabled = false;
 let lastHandledText = "";
 
 function hideOffer() {
-  toggle(elements.clipboardOffer, false);
-  elements.clipboardOffer?.classList.remove("flex");
+  refs.offer.classList.add("is-hidden");
 }
 
 function showOffer(url: string) {
-  if (elements.clipboardOfferUrl) elements.clipboardOfferUrl.textContent = url;
-  toggle(elements.clipboardOffer, true);
-  elements.clipboardOffer?.classList.add("flex");
-}
-
-function renderMonitorButton() {
-  const button = elements.clipboardMonitorBtn;
-  if (!button) return;
-  button.setAttribute("aria-pressed", String(monitorEnabled));
+  refs.offerUrl.textContent = url;
+  refs.offer.classList.remove("is-hidden");
 }
 
 /** Só lê a área de transferência quando o usuário ligou o monitor, e só ao voltar para a janela. */
@@ -29,53 +23,38 @@ async function checkClipboard() {
   if (!monitorEnabled) return;
   try {
     const text = ((await readText()) ?? "").trim();
-    // O parser de URL ignora quebras de linha e espaços; texto com mais de um link não é oferta.
-    if (!text || /\s/.test(text) || text === lastHandledText || !isHttpUrl(text) || text === urlFieldValue()) return;
+    // texto com mais de um link não é oferta
+    if (!text || /\s/.test(text) || text === lastHandledText || !isHttpUrl(text) || text === urlValue()) return;
     lastHandledText = text;
     showOffer(text);
   } catch (error) {
-    console.warn("Não foi possível ler a área de transferência:", error);
+    console.warn("Failed to read the clipboard:", error);
   }
 }
 
-async function toggleMonitor() {
-  const next = !monitorEnabled;
+async function setMonitor(next: boolean) {
   try {
     const settings = await bridge.setClipboardMonitor(next);
     monitorEnabled = settings.clipboardMonitor;
   } catch (error) {
-    console.error("Erro ao alterar o monitor de clipboard:", error);
-    setFieldError(elements.urlError, UI_STRINGS.errorClipboardToggle);
+    console.error("Failed to change the clipboard monitor:", error);
+    toast({ kind: "error", message: UI_STRINGS.errorClipboardToggle });
+    refs.clipboardSwitch.checked = monitorEnabled;
     return;
   }
   if (!monitorEnabled) hideOffer();
-  renderMonitorButton();
-}
-
-/** Colar uma lista com quebras de linha: o campo é de linha única, então vira links separados por espaço. */
-function initUrlPaste() {
-  elements.urlInput?.addEventListener("paste", (event) => {
-    const input = elements.urlInput;
-    const text = event.clipboardData?.getData("text") ?? "";
-    if (!input || !/\s/.test(text.trim())) return;
-    event.preventDefault();
-    const joined = text.split(/\s+/).filter(Boolean).join(" ");
-    input.setRangeText(joined, input.selectionStart ?? input.value.length, input.selectionEnd ?? input.value.length, "end");
-    input.dispatchEvent(new Event("input", { bubbles: true }));
-  });
 }
 
 export function initClipboardUI(enabledAtStart: boolean) {
   monitorEnabled = enabledAtStart;
-  renderMonitorButton();
-  initUrlPaste();
-  elements.clipboardMonitorBtn?.addEventListener("click", () => void toggleMonitor());
-  elements.clipboardDismissBtn?.addEventListener("click", hideOffer);
-  elements.clipboardUseBtn?.addEventListener("click", () => {
-    const url = elements.clipboardOfferUrl?.textContent ?? "";
-    if (url) setUrlFieldValue(url);
+  refs.clipboardSwitch.checked = enabledAtStart;
+  refs.clipboardSwitch.addEventListener("change", () => void setMonitor(refs.clipboardSwitch.checked));
+  refs.offerDismiss.addEventListener("click", hideOffer);
+  refs.offerUse.addEventListener("click", () => {
+    const url = refs.offerUrl.textContent ?? "";
+    if (url) setUrlValue(url);
     hideOffer();
-    elements.urlInput?.focus();
+    refs.urlInput.focus();
   });
   window.addEventListener("focus", () => void checkClipboard());
 }
