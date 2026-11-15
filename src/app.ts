@@ -439,7 +439,7 @@ function buildSettings(concurrency: ReturnType<typeof select>): SettingsView {
     label: "Entrar com o navegador",
     controlId: cookies.element.id,
     control: cookies.element,
-    hint: "Use se o YouTube pedir para confirmar que você não é um robô. Precisa estar logado nesse navegador, e ele fechado durante o download.",
+    hint: "Use se o YouTube pedir para confirmar que você não é um robô. O Firefox é o que funciona de forma confiável: Chrome, Edge e Brave costumam bloquear a leitura dos cookies.",
   });
 
   const section = (title: string, ...children: HTMLElement[]) => h("div", { class: "settings__section" }, h("h3", { class: "settings__title" }, title), ...children);
