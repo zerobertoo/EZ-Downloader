@@ -9,10 +9,21 @@ on:
 permissions:
   contents: read
 
+# Um push novo cancela a execução anterior da mesma branch/PR.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Sem símbolos de depuração o build de teste fica bem menor e mais rápido,
+  # e o cache do Rust deixa de passar de 1 GB.
+  CARGO_PROFILE_DEV_DEBUG: "0"
+
 jobs:
   validate:
     name: Validate
     runs-on: ubuntu-latest
+    timeout-minutes: 20
 
     steps:
       - uses: actions/checkout@v7
@@ -26,14 +37,13 @@ jobs:
         with:
           components: clippy, rustfmt
 
+      # Chave e limpeza automáticas: reaproveita o cache anterior quando o
+      # Cargo.lock muda e descarta o que não foi usado, em vez de criar um
+      # cache novo de ~1 GB a cada mudança.
       - name: Cache Rust build
-        uses: actions/cache@v6
+        uses: Swatinem/rust-cache@v2
         with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            src-tauri/target
-          key: ${{ runner.os }}-cargo-${{ hashFiles('src-tauri/Cargo.lock') }}
+          workspaces: src-tauri
 
       - name: Install Linux system dependencies
         run: |
@@ -42,11 +52,18 @@ jobs:
           # "Hash Sum mismatch" quando o mirror deles está fora de sincronia.
           sudo rm -f /etc/apt/sources.list.d/google-chrome.list
           sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential curl wget file \
+          sudo apt-get install -y --no-install-recommends libwebkit2gtk-4.1-dev build-essential curl wget file \
             libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev
 
       - name: Install dependencies
         run: npm ci
+
+      # Verificações baratas primeiro: falham em segundos, antes dos testes lentos.
+      - name: Rust fmt
+        run: cargo fmt --manifest-path src-tauri/Cargo.toml --check
+
+      - name: Type-check frontend
+        run: npx tsc --noEmit
 
       - name: Create placeholder bundled binaries
         # tauri-build's build.rs requires bundle.resources (resources/bin) to
@@ -57,20 +74,13 @@ jobs:
           touch resources/bin/linux/yt-dlp resources/bin/linux/ffmpeg
           chmod +x resources/bin/linux/yt-dlp resources/bin/linux/ffmpeg
 
-      - name: Type-check frontend
-        run: npx tsc --noEmit
-
       - name: Build frontend
         run: npx vite build
 
-      - name: Rust tests
-        run: cargo test --manifest-path src-tauri/Cargo.toml
-
-      - name: Rust check
-        run: cargo check --manifest-path src-tauri/Cargo.toml
-
-      - name: Rust fmt
-        run: cargo fmt --manifest-path src-tauri/Cargo.toml --check
-
+      # O clippy já compila e checa todos os alvos, então um `cargo check`
+      # separado só repetiria o trabalho.
       - name: Rust clippy
         run: cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
+
+      - name: Rust tests
+        run: cargo test --manifest-path src-tauri/Cargo.toml
