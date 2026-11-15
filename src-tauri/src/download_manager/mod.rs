@@ -21,7 +21,7 @@ mod supervisor;
 
 use args::{
     cookies_browser_args, limit_rate_args, push_ejs_args, quick_download_args, section_arg,
-    sponsorblock_args, subtitles_args, validate_extra_args, validate_proxy,
+    sponsorblock_args, subtitles_args, validate_extra_args, validate_media_url, validate_proxy,
 };
 pub use events::FormatsResult;
 use process::path_file_for;
@@ -233,7 +233,7 @@ impl DownloadManager {
         args.push("--no-warnings".to_string());
         args.push("--encoding".to_string());
         args.push("utf-8".to_string());
-        args.push(item.url.clone());
+        args.push(validate_media_url(&item.url)?);
         Ok(args)
     }
 

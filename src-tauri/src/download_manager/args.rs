@@ -197,6 +197,17 @@ pub(super) fn is_unrecognized_remote_components_error(stderr: &str) -> bool {
         || (stderr.contains("unrecognized arguments") && stderr.contains(JS_RUNTIME_FLAG))
 }
 
+/// O yt-dlp lê qualquer argumento iniciado por `-` como opção, então a URL
+/// precisa ser http(s) de verdade antes de chegar à linha de comando. Vale
+/// também para itens restaurados de `queue.json`, que o usuário pode ter editado.
+pub(super) fn validate_media_url(raw: &str) -> Result<String, String> {
+    let trimmed = raw.trim();
+    match url::Url::parse(trimmed) {
+        Ok(parsed) if matches!(parsed.scheme(), "http" | "https") => Ok(trimmed.to_string()),
+        _ => Err("URL inválida: use um endereço http ou https".to_string()),
+    }
+}
+
 pub(super) fn without_remote_components(args: &[String]) -> Vec<String> {
     let mut result = Vec::with_capacity(args.len());
     let mut i = 0;
@@ -214,6 +225,30 @@ pub(super) fn without_remote_components(args: &[String]) -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn media_url_accepts_http_and_https() {
+        assert_eq!(
+            validate_media_url("  https://youtu.be/abc "),
+            Ok("https://youtu.be/abc".to_string())
+        );
+        assert!(validate_media_url("http://exemplo.com/v?a=1").is_ok());
+    }
+
+    #[test]
+    fn media_url_rejects_option_like_and_foreign_schemes() {
+        for raw in [
+            "--exec=calc",
+            "-o /tmp/x",
+            "file:///etc/passwd",
+            "ftp://exemplo.com/v",
+            "javascript:alert(1)",
+            "sem esquema",
+            "",
+        ] {
+            assert!(validate_media_url(raw).is_err(), "deveria recusar {raw:?}");
+        }
+    }
 
     #[test]
     fn extra_args_accepts_allowlisted_boolean_flag() {
