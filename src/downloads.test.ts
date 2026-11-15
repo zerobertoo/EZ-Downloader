@@ -23,6 +23,7 @@ import {
   handleDebugLine,
   handleDownloadFinished,
   startOptimization,
+  withoutSchedule,
   syncQueue,
   updateConversionProgress,
   updateDownloadProgress,
@@ -143,6 +144,21 @@ describe("enqueueDownload", () => {
     mocked.startDownload.mockRejectedValue(new Error("opção inválida"));
     await expect(enqueueDownload(params)).rejects.toThrow("opção inválida");
     expect(state.downloads.size).toBe(0);
+  });
+});
+
+describe("withoutSchedule", () => {
+  it("remove só o agendamento e mantém o resto das opções", () => {
+    const reenviadas = withoutSchedule({ scheduledAt: 1_700_000_000, proxy: "socks5://127.0.0.1:1080", embedMetadata: true });
+    expect(reenviadas.scheduledAt).toBeUndefined();
+    expect(reenviadas.proxy).toBe("socks5://127.0.0.1:1080");
+    expect(reenviadas.embedMetadata).toBe(true);
+  });
+
+  it("não altera o objeto original", () => {
+    const original = { scheduledAt: 1_700_000_000 };
+    withoutSchedule(original);
+    expect(original.scheduledAt).toBe(1_700_000_000);
   });
 });
 

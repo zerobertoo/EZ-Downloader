@@ -189,7 +189,7 @@ export function createAdvancedOptions() {
   }
 
   function clearErrors() {
-    for (const control of [sectionField, limitRateField, presetField, proxyField, scheduleField]) control.setError(null);
+    for (const control of [sectionField, langsField, limitRateField, presetField, proxyField, scheduleField]) control.setError(null);
   }
 
   /** Lê e valida os campos; devolve null (com o erro já exibido no campo) se algum for inválido. */
@@ -203,6 +203,10 @@ export function createAdvancedOptions() {
     }
     if ((start && !TIME_PATTERN.test(start)) || (end && !TIME_PATTERN.test(end))) {
       sectionField.setError(UI_STRINGS.errorInvalidSection);
+      return null;
+    }
+    if (subtitles.checked && !subtitleLangs.input.value.trim()) {
+      langsField.setError(UI_STRINGS.errorSubtitleLangsRequired);
       return null;
     }
     const rate = limitRate.input.value.trim() || undefined;

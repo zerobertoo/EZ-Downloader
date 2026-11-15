@@ -9,6 +9,7 @@ export const UI_STRINGS = {
   errorIncompleteSection: "Preencha início e fim do corte, ou deixe os dois em branco",
   errorInvalidSection: "Tempo inválido. Use HH:MM:SS (ex: 00:01:30)",
   errorInvalidLimitRate: "Formato inválido. Use um número com K, M ou G (ex: 2M, 500K)",
+  errorSubtitleLangsRequired: "Informe os idiomas das legendas (ex: pt, en) ou desligue a opção",
   errorInvalidSchedule: "Data e hora inválidas",
   errorSchedulePast: "Esse horário já passou",
   errorPresetName: "Dê um nome ao preset",

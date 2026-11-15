@@ -68,7 +68,7 @@ impl DownloadManager {
             .and_then(|r| r);
         let stderr_text = output.as_ref().ok().map(|o| o.stderr.clone());
 
-        let was_cancelled = self.cancelled.lock().unwrap().remove(&id);
+        let mut was_cancelled = self.cancelled.lock().unwrap().remove(&id);
         let (mut status, mut path, mut error) =
             final_status(output, was_cancelled, &item.output_dir);
 
@@ -86,12 +86,21 @@ impl DownloadManager {
             let retry_args = without_remote_components(&args);
             match spawn_attempt(app, &ytdlp_bin, &retry_args, &id) {
                 Ok((handle, retry_join)) => {
-                    self.active.lock().unwrap().insert(id.clone(), handle);
+                    self.active
+                        .lock()
+                        .unwrap()
+                        .insert(id.clone(), handle.clone());
+                    if self.paused.lock().unwrap().contains(&id)
+                        || self.cancelled.lock().unwrap().contains(&id)
+                    {
+                        handle.kill();
+                    }
                     let retry_output = retry_join
                         .join()
                         .map_err(|_| "Erro interno ao aguardar processo".to_string())
                         .and_then(|r| r);
                     let retry_cancelled = self.cancelled.lock().unwrap().remove(&id);
+                    was_cancelled = was_cancelled || retry_cancelled;
                     let (s, p, e) = final_status(retry_output, retry_cancelled, &item.output_dir);
                     status = s;
                     path = p;

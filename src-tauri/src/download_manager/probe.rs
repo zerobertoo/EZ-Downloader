@@ -1,4 +1,4 @@
-use super::args::{cookies_browser_args, push_ejs_args};
+use super::args::{cookies_browser_args, push_ejs_args, validate_media_url};
 use super::process::run_probe;
 use super::{DownloadManager, FormatsResult};
 use crate::format_parser::{classify_ytdlp_error, parse_formats, YtdlpInfo};
@@ -14,7 +14,7 @@ impl DownloadManager {
         let mut args = vec!["--dump-json".to_string(), "--no-warnings".to_string()];
         push_ejs_args(&mut args, self.qjs_bin.as_deref());
         args.extend(self.default_proxy_args());
-        args.push(url.to_string());
+        args.push(validate_media_url(url)?);
         let ytdlp_bin = self.current_ytdlp_bin();
         let output = run_probe(&ytdlp_bin, &args, FORMATS_PROBE_TIMEOUT)?;
 
@@ -50,7 +50,7 @@ impl DownloadManager {
             args.extend(cookies_browser_args(browser)?);
         }
         args.extend(self.default_proxy_args());
-        args.push(url.to_string());
+        args.push(validate_media_url(url)?);
         let output = run_probe(&self.current_ytdlp_bin(), &args, PLAYLIST_PROBE_TIMEOUT)?;
         if output.code == 0 {
             parse_playlist(&output.stdout, url)

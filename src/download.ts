@@ -202,7 +202,7 @@ export async function handleQuickDownload() {
   setButtonBusy(refs.goButton, true);
   try {
     if (urls.length === 1 && looksLikePlaylist(urls[0])) {
-      await openPlaylistSelection(urls[0], buildParams, clearUrlIfAllEnqueued, undefined, singleVideoAction(urls[0], () => void handleQuickDownload()));
+      await openPlaylistSelection(urls[0], buildParams, clearUrlIfAllEnqueued, prefs.cookiesBrowser || undefined, singleVideoAction(urls[0], () => void handleQuickDownload()));
       return;
     }
     const entries = await withDuplicateFlags(urls.map((url) => ({ url, title: null, durationSeconds: null })));
