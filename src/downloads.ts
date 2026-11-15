@@ -250,12 +250,17 @@ async function handleCancel(id: string) {
   }
 }
 
+/** O backend recusa horário no passado, então um reenvio não pode carregar o agendamento original. */
+export function withoutSchedule(options: StartDownloadOptions): StartDownloadOptions {
+  return { ...options, scheduledAt: undefined };
+}
+
 /** Só remove o card antigo depois do reenvio dar certo: um erro síncrono não pode fazer o download sumir. */
 async function handleRetry(id: string) {
   const item = state.downloads.get(id);
   if (!item) return;
   try {
-    await enqueueDownload({ url: item.url, format: item.format, formatLabel: item.formatLabel, title: item.title, outputPath: item.outputPath, options: item.options });
+    await enqueueDownload({ url: item.url, format: item.format, formatLabel: item.formatLabel, title: item.title, outputPath: item.outputPath, options: withoutSchedule(item.options) });
     handleRemove(id);
   } catch (error) {
     console.error("Failed to resubmit download:", error);
@@ -351,6 +356,7 @@ export function handleDebugLine(line: DebugLine) {
   if (!log) return;
   const stick = log.scrollTop + log.clientHeight >= log.scrollHeight - 8;
   log.appendChild(logLine(entry));
+  while (log.childElementCount > DEBUG_LOG_MAX_LINES) log.firstElementChild?.remove();
   if (stick) log.scrollTop = log.scrollHeight;
 }
 
