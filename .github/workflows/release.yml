@@ -1,9 +1,7 @@
 name: Release
 
-# Release manual: nada aqui roda sozinho. A versão vem do que já está commitado
-# (o bump é feito em PR, como qualquer mudança) e o disparo exige digitá-la de
-# novo. O release sai como rascunho: o app dos usuários só atualiza depois que
-# você clica em "Publish release" no GitHub.
+# O release sai como rascunho: o app dos usuários consulta releases/latest e só
+# atualiza depois que o rascunho é publicado no GitHub.
 on:
   workflow_dispatch:
     inputs:
@@ -16,7 +14,6 @@ permissions:
   contents: write
 
 jobs:
-  # ─── Job 1: valida a versão e define a tag ─────────────────────────────────
   prepare:
     name: Validate version
     runs-on: ubuntu-latest
@@ -62,7 +59,6 @@ jobs:
             *)   echo "prerelease=false" >> "$GITHUB_OUTPUT" ;;
           esac
 
-  # ─── Job 2: build de cada plataforma e rascunho do release ─────────────────
   build:
     name: Build — ${{ matrix.platform }} ${{ matrix.arch }}
     needs: prepare
@@ -135,8 +131,8 @@ jobs:
       - name: Run Rust tests
         run: cargo test --manifest-path src-tauri/Cargo.toml
 
-      # Rascunho: o tauri-action cria a tag junto com o rascunho, então um build
-      # que falhe não deixa tag nem release público para limpar no remoto.
+      # A tag nasce junto com o rascunho, então um build que falhe não deixa tag
+      # nem release público para limpar no remoto.
       - name: Build and upload to the draft release
         uses: tauri-apps/tauri-action@v1
         env:
