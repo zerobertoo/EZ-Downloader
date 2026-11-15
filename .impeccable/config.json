@@ -26,6 +26,15 @@
         ],
         "createdAt": "2026-08-13T05:27:36.520Z",
         "reason": "audit-verified false positive: videoThumbnail src is set dynamically in src/ui/formats.ts once a video loads, never rendered empty"
+      },
+      {
+        "rule": "buried-raster",
+        "value": "*",
+        "files": [
+          "index.html"
+        ],
+        "createdAt": "2026-11-15T02:39:39.933Z",
+        "reason": "decidido pelo Claude por delegacao do usuario: grao de filme (.noise-overlay, opacity 0.03) e textura sutil intencional do tema, anterior a Fase 2"
       }
     ]
   }
