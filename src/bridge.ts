@@ -96,6 +96,18 @@ export interface QueueItem {
 export interface Settings {
   maxConcurrent: number;
   downloadPath: string | null;
+  clipboardMonitor: boolean;
+}
+
+export interface PlaylistItem {
+  url: string;
+  title: string | null;
+  durationSeconds: number | null;
+}
+
+export interface PlaylistResult {
+  title: string | null;
+  items: PlaylistItem[];
 }
 
 export interface DebugCommand {
@@ -169,6 +181,13 @@ export const bridge = {
   setMaxConcurrent: (value: number): Promise<Settings> => invoke("set_max_concurrent", { value }),
 
   setDownloadPath: (path: string | null): Promise<Settings> => invoke("set_download_path", { path }),
+
+  setClipboardMonitor: (enabled: boolean): Promise<Settings> => invoke("set_clipboard_monitor", { enabled }),
+
+  getPlaylist: (url: string, cookiesBrowser?: string): Promise<PlaylistResult> =>
+    invoke("get_playlist", { url, cookiesBrowser: cookiesBrowser ?? null }),
+
+  findDuplicates: (urls: string[]): Promise<number[]> => invoke("find_duplicates", { urls }),
 
   onQueueChanged: (callback: (items: QueueItem[]) => void): Promise<UnlistenFn> =>
     listen<QueueItem[]>("queue-changed", (event) => callback(event.payload)),

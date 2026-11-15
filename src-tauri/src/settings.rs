@@ -14,6 +14,7 @@ pub struct Settings {
     pub version: u32,
     pub max_concurrent: usize,
     pub download_path: Option<String>,
+    pub clipboard_monitor: bool,
 }
 
 impl Default for Settings {
@@ -22,6 +23,7 @@ impl Default for Settings {
             version: SETTINGS_FILE_VERSION,
             max_concurrent: DEFAULT_CONCURRENT_DOWNLOADS,
             download_path: None,
+            clipboard_monitor: false,
         }
     }
 }
@@ -55,6 +57,10 @@ impl SettingsStore {
 
     pub fn set_download_path(&self, path: Option<String>) -> Settings {
         self.update(|s| s.download_path = path)
+    }
+
+    pub fn set_clipboard_monitor(&self, enabled: bool) -> Settings {
+        self.update(|s| s.clipboard_monitor = enabled)
     }
 
     fn update(&self, change: impl FnOnce(&mut Settings)) -> Settings {
@@ -122,6 +128,15 @@ mod tests {
         assert_eq!(store.set_max_concurrent(500).max_concurrent, 10);
         fs::write(&path, r#"{"maxConcurrent": 0}"#).unwrap();
         assert_eq!(SettingsStore::new(path).get().max_concurrent, 1);
+    }
+
+    #[test]
+    fn clipboard_monitor_is_off_by_default_and_persists_when_enabled() {
+        let path = temp_path();
+        let store = SettingsStore::new(path.clone());
+        assert!(!store.get().clipboard_monitor);
+        store.set_clipboard_monitor(true);
+        assert!(SettingsStore::new(path).get().clipboard_monitor);
     }
 
     #[test]

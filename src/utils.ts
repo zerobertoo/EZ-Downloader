@@ -1,3 +1,4 @@
+import { currentMode } from "./mode";
 import { UI_STRINGS, elements } from "./state";
 
 /* ════════════════════════════════════════════════════════════════
@@ -16,6 +17,12 @@ export function urlFieldValue(): string {
   return elements.urlInput?.value.trim() ?? "";
 }
 
+export function setUrlFieldValue(value: string) {
+  if (!elements.urlInput) return;
+  elements.urlInput.value = value;
+  elements.urlInput.dispatchEvent(new Event("input", { bubbles: true }));
+}
+
 export function isValidUrl(value: string): boolean {
   try {
     new URL(value);
@@ -23,6 +30,29 @@ export function isValidUrl(value: string): boolean {
   } catch {
     return false;
   }
+}
+
+export function isHttpUrl(value: string): boolean {
+  try {
+    const { protocol } = new URL(value);
+    return protocol === "http:" || protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
+/** Separa por espaço em branco: URLs não contêm espaço, e colar uma lista traz quebras de linha. */
+export function parseUrlList(text: string): { urls: string[]; invalid: string[] } {
+  const tokens = text.split(/\s+/).filter(Boolean);
+  return { urls: tokens.filter(isHttpUrl), invalid: tokens.filter((token) => !isHttpUrl(token)) };
+}
+
+export function formatDuration(totalSeconds: number): string {
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  const pad = (value: number) => String(value).padStart(2, "0");
+  return hours > 0 ? `${hours}:${pad(minutes)}:${pad(seconds)}` : `${minutes}:${pad(seconds)}`;
 }
 
 /**
@@ -41,9 +71,16 @@ export function looksLikePlaylist(url: string): boolean {
 
 export function renderPlaylistHint() {
   if (!elements.playlistHint) return;
-  const isPlaylist = looksLikePlaylist(urlFieldValue());
-  toggle(elements.playlistHint, isPlaylist);
-  if (isPlaylist) {
+  const value = urlFieldValue();
+  const { urls } = parseUrlList(value);
+  const isBatch = /\s/.test(value) && urls.length > 1;
+  const isPlaylist = !isBatch && looksLikePlaylist(value);
+  toggle(elements.playlistHint, isBatch || isPlaylist);
+  if (isBatch && currentMode() === "advanced") {
+    elements.playlistHint.textContent = UI_STRINGS.errorBatchNeedsBasicMode;
+  } else if (isBatch) {
+    elements.playlistHint.textContent = `${urls.length} ${UI_STRINGS.hintBatch}`;
+  } else if (isPlaylist) {
     elements.playlistHint.textContent = UI_STRINGS.hintPlaylist;
   }
 }

@@ -1,6 +1,7 @@
 use crate::convert::{ConversionManager, MediaReport};
 use crate::download_manager::{DownloadManager, DownloadOptions, FormatsResult};
 use crate::history::HistoryEntry;
+use crate::playlist::PlaylistResult;
 use crate::queue::QueueItem;
 use crate::settings::Settings;
 use serde::Serialize;
@@ -126,6 +127,33 @@ pub fn set_max_concurrent(
     value: usize,
 ) -> Settings {
     manager.set_max_concurrent(&app, value)
+}
+
+#[tauri::command]
+pub async fn get_playlist(
+    manager: State<'_, DownloadManager>,
+    url: String,
+    cookies_browser: Option<String>,
+) -> Result<PlaylistResult, String> {
+    if url.trim().is_empty() {
+        return Err("URL inválida".to_string());
+    }
+    let manager = manager.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        manager.get_playlist(&url, cookies_browser.as_deref())
+    })
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+pub fn find_duplicates(manager: State<DownloadManager>, urls: Vec<String>) -> Vec<usize> {
+    manager.find_duplicates(&urls)
+}
+
+#[tauri::command]
+pub fn set_clipboard_monitor(manager: State<DownloadManager>, enabled: bool) -> Settings {
+    manager.set_clipboard_monitor(enabled)
 }
 
 #[tauri::command]

@@ -3,7 +3,7 @@ import { initMode, currentMode } from "./mode";
 import { initTheme } from "./theme";
 import { PATH_STORAGE_KEY, UI_STRINGS, elements, state } from "./state";
 import { renderPlaylistHint, toggle } from "./utils";
-import { handleDownload, handleQuickDownload, resetAdvancedPlaylistConfirm, resetQuickPlaylistConfirm } from "./download";
+import { handleDownload, handleQuickDownload } from "./download";
 import {
   handleConversionFinished,
   handleDownloadFinished,
@@ -13,12 +13,14 @@ import {
   updateDownloadProgress,
 } from "./downloads";
 import { appendDebugLine, showDebugCommand, toggleNerdMode } from "./ui/debug";
+import { initClipboardUI } from "./ui/clipboard";
 import { handleSelectPath, updateDownloadPathDisplay } from "./ui/destination";
 import { clearFieldError, setFieldError } from "./ui/feedback";
 import { handleFetchFormats, handleFormatChange } from "./ui/formats";
 import { initHistoryUI, loadHistory } from "./ui/history";
 import { handleToggleMode, renderModeLabel, setQuickFormat } from "./ui/mode-controls";
 import { render } from "./ui/render";
+import { initSelectionUI } from "./ui/selection";
 import { closeThemePopover, toggleThemePopover } from "./ui/theme-popover";
 
 initTheme();
@@ -45,6 +47,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   renderModeLabel();
   initDownloadsUI();
   initHistoryUI();
+  initSelectionUI();
   document.addEventListener("click", (e) => {
     const popover = elements.themePopover;
     if (popover && !popover.classList.contains("hidden") && !popover.contains(e.target as Node) && e.target !== elements.themeToggleBtn) {
@@ -73,8 +76,6 @@ document.addEventListener("DOMContentLoaded", async () => {
   // Editar a URL reavalia se o vídeo carregado ainda corresponde ao que está no campo.
   elements.urlInput?.addEventListener("input", () => {
     clearFieldError(elements.urlError);
-    resetQuickPlaylistConfirm();
-    resetAdvancedPlaylistConfirm();
     renderPlaylistHint();
     render();
   });
@@ -101,6 +102,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       updateDownloadPathDisplay();
     }
 
+    initClipboardUI(settings.clipboardMonitor);
     await bridge.onQueueChanged((items) => syncQueue(items));
     await bridge.onDownloadProgress((progress) => updateDownloadProgress(progress));
     await bridge.onDownloadFinished((finished) => handleDownloadFinished(finished));

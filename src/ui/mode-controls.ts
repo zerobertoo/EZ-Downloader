@@ -1,8 +1,8 @@
-import { resetAdvancedPlaylistConfirm, resetQuickPlaylistConfirm } from "../download";
 import { currentMode, setMode, type AppMode } from "../mode";
 import { elements, state } from "../state";
 import { toggle } from "../utils";
 import { setPhase } from "./render";
+import { closeSelection } from "./selection";
 
 /* ════════════════════════════════════════════════════════════════
    MODO BÁSICO / AVANÇADO
@@ -51,8 +51,7 @@ export function handleToggleMode() {
     return;
   }
   resetModeSwitchConfirm();
-  resetQuickPlaylistConfirm();
-  resetAdvancedPlaylistConfirm();
+  closeSelection();
 
   const next: AppMode = from === "basic" ? "advanced" : "basic";
   setMode(next);

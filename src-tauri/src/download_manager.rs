@@ -1,5 +1,6 @@
 use crate::format_parser::{classify_ytdlp_error, parse_formats, FormatOption, YtdlpInfo};
 use crate::history::{HistoryEntry, HistoryStore};
+use crate::playlist::{parse_playlist, PlaylistResult};
 use crate::process_runner::{spawn_process, ProcessHandle, ProcessOutput};
 pub use crate::queue::DownloadOptions;
 use crate::queue::{self, ItemStatus, QueueItem, QueueState};
@@ -15,6 +16,9 @@ use tauri_plugin_notification::NotificationExt;
 use uuid::Uuid;
 
 const PROGRESS_THROTTLE_MS: u128 = 500;
+const FORMATS_PROBE_TIMEOUT: Duration = Duration::from_secs(30);
+// Playlists grandes levam bem mais que um vídeo só pra listar.
+const PLAYLIST_PROBE_TIMEOUT: Duration = Duration::from_secs(120);
 
 #[derive(Debug, Serialize, Clone)]
 pub struct DownloadProgress {
@@ -334,7 +338,7 @@ impl DownloadManager {
         push_ejs_args(&mut args, self.qjs_bin.as_deref());
         args.push(url.to_string());
         let ytdlp_bin = self.current_ytdlp_bin();
-        let output = run_probe(&ytdlp_bin, &args)?;
+        let output = run_probe(&ytdlp_bin, &args, FORMATS_PROBE_TIMEOUT)?;
 
         if output.code == 0 {
             let info: YtdlpInfo = serde_json::from_str(&output.stdout)
@@ -766,6 +770,57 @@ impl DownloadManager {
         self.settings.set_download_path(path)
     }
 
+    pub fn set_clipboard_monitor(&self, enabled: bool) -> Settings {
+        self.settings.set_clipboard_monitor(enabled)
+    }
+
+    pub fn get_playlist(
+        &self,
+        url: &str,
+        cookies_browser: Option<&str>,
+    ) -> Result<PlaylistResult, String> {
+        let mut args = vec![
+            "--flat-playlist".to_string(),
+            "--dump-single-json".to_string(),
+            "--no-warnings".to_string(),
+        ];
+        push_ejs_args(&mut args, self.qjs_bin.as_deref());
+        if let Some(browser) = cookies_browser {
+            args.extend(cookies_browser_args(browser)?);
+        }
+        args.push(url.to_string());
+        let output = run_probe(&self.current_ytdlp_bin(), &args, PLAYLIST_PROBE_TIMEOUT)?;
+        if output.code == 0 {
+            parse_playlist(&output.stdout, url)
+        } else {
+            let message = classify_ytdlp_error(&output.stderr);
+            log::warn!("Busca da playlist falhou para {url}: {message}");
+            Err(message)
+        }
+    }
+
+    /// Posições das URLs que já estão na fila, já foram baixadas com sucesso ou
+    /// se repetem no próprio lote. Falhas e cancelamentos não contam: baixar
+    /// de novo é o esperado.
+    pub fn find_duplicates(&self, urls: &[String]) -> Vec<usize> {
+        let mut known: Vec<String> = self
+            .queue
+            .lock()
+            .unwrap()
+            .items()
+            .into_iter()
+            .map(|item| item.url)
+            .collect();
+        known.extend(
+            self.history
+                .entries()
+                .into_iter()
+                .filter(|entry| entry.status == "done")
+                .map(|entry| entry.url),
+        );
+        crate::url_tools::duplicate_positions(urls, &known)
+    }
+
     pub fn history_entries(&self) -> Vec<HistoryEntry> {
         self.history.entries()
     }
@@ -777,12 +832,12 @@ impl DownloadManager {
 
 /// Roda uma consulta síncrona (sem streaming de progresso, ex: --dump-json)
 /// com fallback automático se o binário for velho demais pro --remote-components.
-fn run_probe(ytdlp_bin: &str, args: &[String]) -> Result<ProcessOutput, String> {
+fn run_probe(ytdlp_bin: &str, args: &[String], timeout: Duration) -> Result<ProcessOutput, String> {
     let started = Instant::now();
     let (_, join) = spawn_process(
         ytdlp_bin,
         args,
-        Some(Duration::from_secs(30)),
+        Some(timeout),
         |_| {},
         |_| {},
     )?;
@@ -801,7 +856,7 @@ fn run_probe(ytdlp_bin: &str, args: &[String]) -> Result<ProcessOutput, String> 
         let (_, join) = spawn_process(
             ytdlp_bin,
             &fallback_args,
-            Some(Duration::from_secs(30)),
+            Some(timeout),
             |_| {},
             |_| {},
         )?;

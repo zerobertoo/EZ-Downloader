@@ -24,7 +24,7 @@ const progressRefs = new Map<
   { fill: HTMLElement; track: HTMLElement; pct: HTMLElement; statusText: HTMLElement; statsText: HTMLElement }
 >();
 
-interface EnqueueParams {
+export interface EnqueueParams {
   url: string;
   format: string;
   formatLabel: string;

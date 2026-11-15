@@ -1,6 +1,7 @@
 import { bridge, type FormatOption } from "../bridge";
 import { UI_STRINGS, elements, state } from "../state";
-import { errorMessage, formatFileSize, isValidUrl, urlFieldValue } from "../utils";
+import { openAdvancedPlaylistSelection } from "../download";
+import { errorMessage, formatFileSize, isValidUrl, looksLikePlaylist, urlFieldValue } from "../utils";
 import { clearFieldErrors, setFieldError } from "./feedback";
 import { setPhase } from "./render";
 
@@ -19,8 +20,18 @@ export async function handleFetchFormats() {
     return;
   }
 
+  if (/\s/.test(url)) {
+    setFieldError(elements.urlError, UI_STRINGS.errorBatchNeedsBasicMode);
+    return;
+  }
+
   if (!isValidUrl(url)) {
     setFieldError(elements.urlError, UI_STRINGS.errorInvalidUrl);
+    return;
+  }
+
+  if (looksLikePlaylist(url)) {
+    await openAdvancedPlaylistSelection(url);
     return;
   }
 

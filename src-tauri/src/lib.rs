@@ -5,9 +5,11 @@ mod download_manager;
 mod format_parser;
 mod history;
 mod paths;
+mod playlist;
 mod process_runner;
 mod queue;
 mod settings;
+mod url_tools;
 mod ytdlp_updater;
 
 use convert::ConversionManager;
@@ -187,6 +189,7 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_notification::init())
+        .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(
             tauri_plugin_log::Builder::new()
@@ -310,6 +313,9 @@ pub fn run() {
             commands::get_settings,
             commands::set_max_concurrent,
             commands::set_download_path,
+            commands::set_clipboard_monitor,
+            commands::get_playlist,
+            commands::find_duplicates,
             commands::get_history,
             commands::clear_history,
             commands::select_download_path,
