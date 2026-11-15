@@ -41,19 +41,25 @@ Acesse a página de [Releases](https://github.com/zerobertoo/EZ-Downloader/relea
 
 ## 🚀 Como usar
 
-1. **Cole a URL** do vídeo que deseja baixar
-2. Clique em **Buscar** e aguarde carregar as informações
-3. **Escolha o formato** (melhor qualidade, resolução específica ou só o áudio)
-4. Selecione a **pasta de destino**
-5. Clique em **Iniciar Download** e acompanhe o progresso em tempo real
+**Modo Básico** (padrão): cole o link, deixe **MP4** ou **MP3** marcado (a escolha fica lembrada) e clique em **Baixar** (ou aperte Enter). O download entra na prateleira e começa sozinho. Vários links separados por espaço também funcionam.
+
+**Modo Avançado**: use o alternador no topo para escolher formato e resolução, corte, legendas, SponsorBlock, proxy, agendamento, presets e mais.
+
+Atalhos (Ctrl, ou Cmd no macOS): `L` foca o link, `M` alterna o modo, `H` abre o histórico, `J` abre os downloads simultâneos, `E` abre os ajustes e `Enter` executa a ação principal.
+
+> Se o YouTube pedir para confirmar que você não é um robô, abra os **Ajustes** e escolha um navegador em "Entrar com o navegador". O Firefox é o que funciona de forma confiável: Chrome, Edge e Brave costumam bloquear a leitura dos cookies.
 
 ---
 
 ## ⚙️ Funcionalidades
 
-- 🎞️ **Múltiplos formatos**: vídeo em várias resoluções, áudio em MP3/M4A e mais
-- ⚡ **Progresso em tempo real**: percentual, velocidade e tempo restante
-- 🗂️ **Seleção de pasta**: escolha onde salvar cada download
+- 🎞️ **Prateleira de fitas**: cada download é uma fita VHS com progresso, velocidade e tempo restante, e carimbo ao terminar
+- ⏯️ **Fila confiável**: pausa, retomada, prioridade e limite de downloads simultâneos; sobrevive ao fechamento do app
+- 📋 **Playlists e duplicatas**: seleção de itens, "só este vídeo" e aviso de link já baixado
+- 🛠️ **Otimizar compatibilidade**: gera uma cópia MP4 (H.264) de arquivos com codec pouco compatível, na pasta que você escolher
+- 🔎 **Detalhes técnicos**: comando e log do yt-dlp dentro de cada item, para diagnóstico
+- 🎨 **Cinco temas de cor**: Brasa, Azul, Verde, Violeta e Rosa, com respeito a `prefers-reduced-motion`
+- ⌨️ **Acessível**: navegação completa por teclado e componentes próprios, sem controles nativos
 - 🌐 **+1000 sites suportados**: qualquer plataforma que o yt-dlp suporte
 - 📦 **Zero dependências**: yt-dlp e ffmpeg já estão incluídos no app
 - 🖥️ **Multiplataforma**: Windows, macOS (Intel e Apple Silicon) e Linux
@@ -99,6 +105,12 @@ src-tauri/src/
 ├── lib.rs                 # Bootstrap do app, janela, menu, plugins (updater, logging)
 ├── commands.rs             # Comandos invocáveis do frontend (get_formats, start_download, ...)
 ├── download_manager.rs     # Spawna yt-dlp, stream de progresso, cancelamento
+├── queue.rs                # Fila persistente (pausa, retomada, agendamento)
+├── convert.rs              # Otimização de compatibilidade (H.264) com pasta de saída opcional
+├── playlist.rs             # Listagem de itens de playlist
+├── history.rs, settings.rs # Histórico e configurações persistidas
+├── output_template.rs      # Templates de nome de arquivo
+├── url_tools.rs            # Normalização e checagem de duplicatas
 ├── format_parser.rs        # Deduplicação de formatos e mapeamento de erros
 ├── process_runner.rs       # Wrapper de spawn com timeout e streaming
 ├── dependency_checker.rs   # Checagem de yt-dlp/ffmpeg no boot
@@ -106,14 +118,20 @@ src-tauri/src/
 └── ytdlp_updater.rs        # Atualiza o yt-dlp embutido em runtime (menu Ajuda → Atualizar yt-dlp)
 
 src/
-├── main.ts                # Lógica de UI e máquina de estados (showSection)
+├── main.ts                 # Inicialização e ligação dos eventos do backend
+├── app.ts                  # Monta a tela e controla fase e modo
+├── download.ts, downloads.ts # Fluxo de envio à fila e prateleira de fitas
 ├── bridge.ts               # Wrapper tipado sobre @tauri-apps/api (invoke/listen)
-├── mode.ts                 # Modo Básico/Avançado (persistido em localStorage)
-├── theme.ts                # Temas de cor (persistidos em localStorage)
-└── styles.css               # Design system Obsidian & Ember (CSS custom properties)
+├── prefs.ts, mode.ts, theme.ts # Preferências, modo e tema (localStorage)
+├── shortcuts.ts            # Atalhos de teclado
+├── components/             # Componentes próprios (segmented, select, popover, diálogo, fita SVG...)
+├── ui/                     # Formulário avançado, histórico, seleção e área de transferência
+└── styles/                 # CSS puro: tokens, base, components e app (Locadora de Fitas)
 
-index.html                  # Markup com todos os IDs usados por main.ts
+index.html                  # Só o contêiner #app; a tela inteira é montada por src/app.ts
 ```
+
+O design está documentado em [PRODUCT.md](PRODUCT.md) e [DESIGN.md](DESIGN.md).
 
 Logs de runtime ficam no diretório de logs do app (via `tauri-plugin-log`): `~/.local/share/com.ezdownloader.app/logs/` no Linux, `%APPDATA%/com.ezdownloader.app/logs/` no Windows e `~/Library/Logs/com.ezdownloader.app/` no macOS.
 

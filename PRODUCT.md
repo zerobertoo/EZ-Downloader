@@ -19,14 +19,15 @@ Zero dependências para instalar: yt-dlp e ffmpeg vêm embutidos, e funciona em 
 Janela de desktop em Windows, macOS e Linux, webview do Tauri. A fila de downloads vive no backend Rust e sobrevive ao reinício do app. Foco em PC; Android só no futuro; iOS fora do mapa.
 
 ## Capabilities and Constraints
-- Modo Básico (colar e baixar, vários links de uma vez) e Modo Avançado (formato, corte, legendas, cookies, limite de velocidade, template de nome, presets, capa/capítulos/metadados, SponsorBlock, proxy, agendamento).
+- Modo Básico (colar e baixar numa ação, MP4/MP3 lembrado, vários links de uma vez; "Entrar com o navegador" nos ajustes quando o YouTube exige login) e Modo Avançado (formato, corte, legendas, cookies, limite de velocidade, template de nome, presets, capa/capítulos/metadados, SponsorBlock, proxy, agendamento).
 - Fila com pausa, retomada e histórico; playlist com seleção de itens; detecção de duplicatas.
 - Anti-objetivo: nenhum recurso novo pode piorar o fluxo simples de colar a URL e baixar.
 - Credenciais nunca são gravadas em texto puro (cookies guardam só o nome do navegador; proxy com usuário e senha é recusado).
-- O app ainda não foi rodado de verdade em ambiente de desenvolvimento (faltam as Build Tools do MSVC no Windows).
+- Builds do Windows saem por cross-compile em Docker (`cargo xwin`), sem as Build Tools do MSVC instaladas.
+- Nada nativo na interface: select, checkbox, datepicker, tooltip, diálogo e toast são componentes próprios. Exceções do SO: seletor de pasta, notificações e menu do app.
 
 ## Brand Commitments
-Nome EZ Downloader. Tom direto, em português do Brasil. Cinco temas de cor (laranja padrão, azure, verdant, violet, rose) sobre fundo escuro.
+Nome EZ Downloader. Tom direto, em português do Brasil. Direção visual "Locadora de Fitas": cada download é uma fita VHS. Cinco temas de cor (Brasa padrão, Azul, Verde, Violeta, Rosa) sobre fundo escuro.
 
 ## Evidence on Hand
 README com descrição e instalação, site em `site/`. Não há depoimentos, métricas de uso nem números de download registrados: não inventar.
