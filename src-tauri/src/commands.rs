@@ -91,7 +91,15 @@ pub fn start_download(
         sponsorblock,
         proxy,
     };
-    manager.start_download(&app, &url, &format, title, Some(output_path), options, scheduled_at)
+    manager.start_download(
+        &app,
+        &url,
+        &format,
+        title,
+        Some(output_path),
+        options,
+        scheduled_at,
+    )
 }
 
 #[tauri::command]
@@ -155,8 +163,8 @@ pub async fn get_playlist(
     tauri::async_runtime::spawn_blocking(move || {
         manager.get_playlist(&url, cookies_browser.as_deref())
     })
-        .await
-        .map_err(|e| e.to_string())?
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
@@ -268,8 +276,8 @@ pub async fn start_conversion(
     tauri::async_runtime::spawn_blocking(move || {
         converter.start(&app, &id, &path, output_dir.as_deref())
     })
-        .await
-        .map_err(|e| e.to_string())?
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]

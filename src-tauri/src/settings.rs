@@ -89,7 +89,9 @@ impl SettingsStore {
             return Err("O preset precisa de um nome".to_string());
         }
         if name.chars().count() > MAX_PRESET_NAME_LENGTH {
-            return Err(format!("O nome do preset passa de {MAX_PRESET_NAME_LENGTH} caracteres"));
+            return Err(format!(
+                "O nome do preset passa de {MAX_PRESET_NAME_LENGTH} caracteres"
+            ));
         }
         if let Some(mode) = &preset.sponsorblock {
             if !matches!(mode.as_str(), "remove" | "mark") {

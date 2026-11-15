@@ -117,7 +117,10 @@ mod tests {
 
     #[test]
     fn literal_percent_is_escaped() {
-        assert_eq!(to_ytdlp_template("100% {title}").unwrap(), "100%% %(title)s");
+        assert_eq!(
+            to_ytdlp_template("100% {title}").unwrap(),
+            "100%% %(title)s"
+        );
     }
 
     #[test]

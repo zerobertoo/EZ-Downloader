@@ -239,8 +239,14 @@ fn limit_rate_args(raw: &str) -> Result<Vec<String>, String> {
 fn validate_proxy(raw: &str) -> Result<String, String> {
     let raw = raw.trim();
     let parsed = url::Url::parse(raw).map_err(|_| format!("Proxy inválido: {raw}"))?;
-    if !matches!(parsed.scheme(), "http" | "https" | "socks4" | "socks4a" | "socks5" | "socks5h") {
-        return Err(format!("Esquema de proxy não suportado: {}", parsed.scheme()));
+    if !matches!(
+        parsed.scheme(),
+        "http" | "https" | "socks4" | "socks4a" | "socks5" | "socks5h"
+    ) {
+        return Err(format!(
+            "Esquema de proxy não suportado: {}",
+            parsed.scheme()
+        ));
     }
     if parsed.host_str().is_none() {
         return Err(format!("Proxy sem host: {raw}"));
@@ -257,7 +263,10 @@ fn sponsorblock_args(mode: &str) -> Result<Vec<String>, String> {
         "mark" => "--sponsorblock-mark",
         _ => return Err(format!("Modo de SponsorBlock inválido: {mode}")),
     };
-    Ok(vec![flag.to_string(), "sponsor,selfpromo,interaction".to_string()])
+    Ok(vec![
+        flag.to_string(),
+        "sponsor,selfpromo,interaction".to_string(),
+    ])
 }
 
 /// Args de seleção pro Modo Rápido — sem chamada prévia de metadados,
@@ -395,6 +404,7 @@ impl DownloadManager {
     /// Valida e enfileira um download, retornando o id na hora. O processo só
     /// começa quando houver slot livre; o fim (sucesso, falha ou cancelamento)
     /// é sinalizado pelo evento "download-finished".
+    #[allow(clippy::too_many_arguments)] // espelha os parâmetros do comando Tauri; agrupar mudaria o contrato
     pub fn start_download(
         &self,
         app: &AppHandle,
@@ -880,7 +890,10 @@ impl DownloadManager {
     }
 
     pub fn set_default_proxy(&self, proxy: Option<String>) -> Result<Settings, String> {
-        let proxy = match proxy.map(|p| p.trim().to_string()).filter(|p| !p.is_empty()) {
+        let proxy = match proxy
+            .map(|p| p.trim().to_string())
+            .filter(|p| !p.is_empty())
+        {
             Some(value) => Some(validate_proxy(&value)?),
             None => None,
         };
@@ -952,13 +965,7 @@ impl DownloadManager {
 /// com fallback automático se o binário for velho demais pro --remote-components.
 fn run_probe(ytdlp_bin: &str, args: &[String], timeout: Duration) -> Result<ProcessOutput, String> {
     let started = Instant::now();
-    let (_, join) = spawn_process(
-        ytdlp_bin,
-        args,
-        Some(timeout),
-        |_| {},
-        |_| {},
-    )?;
+    let (_, join) = spawn_process(ytdlp_bin, args, Some(timeout), |_| {}, |_| {})?;
     let output = join
         .join()
         .map_err(|_| "Erro interno ao aguardar processo".to_string())??;
@@ -971,13 +978,7 @@ fn run_probe(ytdlp_bin: &str, args: &[String], timeout: Duration) -> Result<Proc
     if output.code != 0 && is_unrecognized_remote_components_error(&output.stderr) {
         let fallback_started = Instant::now();
         let fallback_args = without_remote_components(args);
-        let (_, join) = spawn_process(
-            ytdlp_bin,
-            &fallback_args,
-            Some(timeout),
-            |_| {},
-            |_| {},
-        )?;
+        let (_, join) = spawn_process(ytdlp_bin, &fallback_args, Some(timeout), |_| {}, |_| {})?;
         let fallback_output = join
             .join()
             .map_err(|_| "Erro interno ao aguardar processo".to_string())??;
@@ -1240,7 +1241,10 @@ mod tests {
 
     #[test]
     fn sponsorblock_modes_map_to_flags_and_reject_unknown() {
-        assert_eq!(sponsorblock_args("remove").unwrap()[0], "--sponsorblock-remove");
+        assert_eq!(
+            sponsorblock_args("remove").unwrap()[0],
+            "--sponsorblock-remove"
+        );
         assert_eq!(sponsorblock_args("mark").unwrap()[0], "--sponsorblock-mark");
         assert!(sponsorblock_args("all").is_err());
     }

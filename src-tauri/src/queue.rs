@@ -261,7 +261,10 @@ mod tests {
             state.enqueue(item(id));
         }
         let started = state.promote(&HashSet::new(), 0);
-        assert_eq!(started.iter().map(|i| i.id.as_str()).collect::<Vec<_>>(), ["a", "b"]);
+        assert_eq!(
+            started.iter().map(|i| i.id.as_str()).collect::<Vec<_>>(),
+            ["a", "b"]
+        );
         assert_eq!(state.status_of("c"), Some(ItemStatus::Queued));
         assert!(state.promote(&HashSet::new(), 0).is_empty());
     }

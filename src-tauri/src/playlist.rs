@@ -156,7 +156,10 @@ mod tests {
     #[test]
     fn negative_duration_is_dropped() {
         let json = r#"{"entries": [{"url": "https://example.com/a", "duration": -1}]}"#;
-        assert_eq!(parse_playlist(json, SOURCE).unwrap().items[0].duration_seconds, None);
+        assert_eq!(
+            parse_playlist(json, SOURCE).unwrap().items[0].duration_seconds,
+            None
+        );
     }
 
     #[test]

@@ -1,7 +1,8 @@
 use std::collections::HashSet;
 use url::Url;
 
-const GENERIC_TRACKING_PARAMS: &[&str] = &["fbclid", "gclid", "igshid", "mc_cid", "mc_eid", "ref_src"];
+const GENERIC_TRACKING_PARAMS: &[&str] =
+    &["fbclid", "gclid", "igshid", "mc_cid", "mc_eid", "ref_src"];
 
 // No YouTube estes parâmetros mudam a URL sem mudar o vídeo; em outros sites
 // "t" ou "index" podem identificar o conteúdo, então só caem aqui.
@@ -111,10 +112,22 @@ mod tests {
     #[test]
     fn youtube_shorts_embed_and_mobile_hosts_are_unified() {
         let canonical = normalize_url("https://www.youtube.com/watch?v=abc123");
-        assert_eq!(normalize_url("https://youtube.com/shorts/abc123"), canonical);
-        assert_eq!(normalize_url("https://www.youtube.com/embed/abc123"), canonical);
-        assert_eq!(normalize_url("https://m.youtube.com/watch?v=abc123"), canonical);
-        assert_eq!(normalize_url("https://music.youtube.com/watch?v=abc123"), canonical);
+        assert_eq!(
+            normalize_url("https://youtube.com/shorts/abc123"),
+            canonical
+        );
+        assert_eq!(
+            normalize_url("https://www.youtube.com/embed/abc123"),
+            canonical
+        );
+        assert_eq!(
+            normalize_url("https://m.youtube.com/watch?v=abc123"),
+            canonical
+        );
+        assert_eq!(
+            normalize_url("https://music.youtube.com/watch?v=abc123"),
+            canonical
+        );
     }
 
     #[test]
