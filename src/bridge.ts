@@ -252,7 +252,8 @@ export const bridge = {
   analyzeMedia: (path: string): Promise<MediaReport> => invoke("analyze_media", { path }),
 
   /** `id` é o do download de origem; o fim chega via "conversion-finished". */
-  startConversion: (id: string, path: string): Promise<void> => invoke("start_conversion", { id, path }),
+  startConversion: (id: string, path: string, outputDir?: string): Promise<void> =>
+    invoke("start_conversion", { id, path, outputDir: outputDir ?? null }),
 
   cancelConversion: (id: string): Promise<void> => invoke("cancel_conversion", { id }),
 

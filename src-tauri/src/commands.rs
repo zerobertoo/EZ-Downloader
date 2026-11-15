@@ -262,9 +262,12 @@ pub async fn start_conversion(
     converter: State<'_, ConversionManager>,
     id: String,
     path: String,
+    output_dir: Option<String>,
 ) -> Result<(), String> {
     let converter = converter.inner().clone();
-    tauri::async_runtime::spawn_blocking(move || converter.start(&app, &id, &path))
+    tauri::async_runtime::spawn_blocking(move || {
+        converter.start(&app, &id, &path, output_dir.as_deref())
+    })
         .await
         .map_err(|e| e.to_string())?
 }

@@ -173,7 +173,14 @@ pub fn probe_media(ffmpeg: &str, path: &str) -> Result<MediaInfo, String> {
 }
 
 pub fn converted_path_for(input: &Path) -> PathBuf {
-    let dir = input.parent().unwrap_or_else(|| Path::new("."));
+    converted_path_in(input, None)
+}
+
+/// Igual a `converted_path_for`, mas grava em `output_dir` quando informado.
+pub fn converted_path_in(input: &Path, output_dir: Option<&Path>) -> PathBuf {
+    let dir = output_dir
+        .or_else(|| input.parent())
+        .unwrap_or_else(|| Path::new("."));
     let stem = input
         .file_stem()
         .map(|s| s.to_string_lossy().to_string())
@@ -297,7 +304,18 @@ impl ConversionManager {
 
     /// Dispara a conversão em background; o fim chega pelo evento
     /// "conversion-finished" e o progresso por "conversion-progress".
-    pub fn start(&self, app: &AppHandle, id: &str, path: &str) -> Result<(), String> {
+    pub fn start(
+        &self,
+        app: &AppHandle,
+        id: &str,
+        path: &str,
+        output_dir: Option<&str>,
+    ) -> Result<(), String> {
+        if let Some(dir) = output_dir {
+            if !Path::new(dir).is_dir() {
+                return Err("A pasta de destino não existe".to_string());
+            }
+        }
         // Reserva o slot antes da análise lenta: evita conversão dupla e cancelamento perdido.
         {
             let mut active = self.active.lock().unwrap();
@@ -308,17 +326,23 @@ impl ConversionManager {
         }
         self.cancelled.lock().unwrap().remove(id);
 
-        self.launch(app, id, path).inspect_err(|_| {
+        self.launch(app, id, path, output_dir).inspect_err(|_| {
             self.active.lock().unwrap().remove(id);
             self.cancelled.lock().unwrap().remove(id);
         })
     }
 
-    fn launch(&self, app: &AppHandle, id: &str, path: &str) -> Result<(), String> {
+    fn launch(
+        &self,
+        app: &AppHandle,
+        id: &str,
+        path: &str,
+        output_dir: Option<&str>,
+    ) -> Result<(), String> {
         let info = probe_media(&self.ffmpeg_bin, path)?;
         let total_secs = info.duration_secs.filter(|secs| *secs > 0.0);
         let encoder = detect_encoder(&self.ffmpeg_bin);
-        let output = converted_path_for(Path::new(path));
+        let output = converted_path_in(Path::new(path), output_dir.map(Path::new));
         let output_str = output.to_string_lossy().to_string();
         log::info!(
             "Convertendo {id} com {}: {} -> {}",
@@ -531,6 +555,21 @@ mod tests {
     fn converted_path_sits_next_to_original() {
         let path = converted_path_for(Path::new("/nonexistent-dir/My Video.webm"));
         assert_eq!(path, PathBuf::from("/nonexistent-dir/My Video (H.264).mp4"));
+    }
+
+    #[test]
+    fn converted_path_uses_chosen_directory_when_given() {
+        let path = converted_path_in(
+            Path::new("/nonexistent-dir/My Video.webm"),
+            Some(Path::new("/other-dir")),
+        );
+        assert_eq!(path, PathBuf::from("/other-dir/My Video (H.264).mp4"));
+    }
+
+    #[test]
+    fn converted_path_without_directory_matches_original_behaviour() {
+        let input = Path::new("/nonexistent-dir/My Video.webm");
+        assert_eq!(converted_path_in(input, None), converted_path_for(input));
     }
 
     #[test]
