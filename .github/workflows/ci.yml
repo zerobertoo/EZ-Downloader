@@ -65,6 +65,12 @@ jobs:
       - name: Type-check frontend
         run: npx tsc --noEmit
 
+      - name: Frontend tests
+        run: npm test
+
+      - name: Site tests
+        run: npm run test:site
+
       - name: Create placeholder bundled binaries
         # tauri-build's build.rs requires bundle.resources (resources/bin) to
         # exist at compile time. CI doesn't need real yt-dlp/ffmpeg binaries
