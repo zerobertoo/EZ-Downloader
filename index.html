@@ -31,7 +31,7 @@
         <div class="flex shrink-0 items-center gap-2 [-webkit-app-region:no-drag]">
           <!-- janela estreita: a versão é decorativa, some antes de cortar os controles reais -->
           <span id="version" class="rounded-full border border-line bg-surface-2 px-[9px] py-0.5 font-mono text-[0.6875rem] tracking-[0.02em] text-fg-3 max-[420px]:hidden">v...</span>
-          <button id="nerdModeBtn" class="pill" aria-label="Modo Nerd" aria-pressed="false" title="Modo Nerd: mostra o comando e o log ao vivo">
+          <button id="nerdModeBtn" class="pill" aria-label="Modo Nerd" aria-pressed="false" title="Modo Nerd: mostra o comando e o log ao vivo (Ctrl+E)" aria-keyshortcuts="Control+E">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true">
               <polyline points="8 6 2 12 8 18" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
               <polyline points="16 6 22 12 16 18" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
@@ -39,7 +39,7 @@
             Nerd
           </button>
           <button id="clipboardMonitorBtn" class="pill" aria-label="Monitorar área de transferência" aria-pressed="false" title="Detecta links copiados e oferece usá-los (desligado por padrão)">Clipboard</button>
-          <button id="modeToggleBtn" class="pill" aria-label="Alternar Básico/Avançado">
+          <button id="modeToggleBtn" class="pill" aria-label="Alternar Básico/Avançado" title="Alternar modo (Ctrl+M)" aria-keyshortcuts="Control+M">
             <span id="modeToggleLabel">Básico</span>
           </button>
           <button id="themeToggleBtn" class="flex size-7 items-center justify-center rounded-lg border border-line bg-surface-2 text-fg-2 transition-colors duration-150 hover:border-line-2 hover:bg-surface-3 hover:text-fg pointer-coarse:size-11" aria-label="Escolher tema" aria-expanded="false">
@@ -90,6 +90,8 @@
                   autocomplete="off"
                   spellcheck="false"
                   aria-label="URL do vídeo"
+                  title="Campo da URL (Ctrl+L). Ctrl+Enter executa a ação principal."
+                  aria-keyshortcuts="Control+L Control+Enter"
                 />
               </div>
               <button id="fetchFormatsBtn" class="btn-accent h-11 px-5 text-sm tracking-[-0.01em] shadow-accent-sm hover:not-disabled:shadow-accent-sm-hover group-data-[mode=basic]/app:hidden!" aria-label="Buscar formatos">
@@ -374,12 +376,12 @@
 
           <div class="flex items-center justify-between gap-3 px-1">
             <label for="maxConcurrentSelect" class="field-label">Downloads simultâneos</label>
-            <select id="maxConcurrentSelect" class="field-input h-9 w-20 flex-none" aria-label="Quantidade de downloads simultâneos"></select>
+            <select id="maxConcurrentSelect" class="field-input h-9 w-20 flex-none" aria-label="Quantidade de downloads simultâneos" title="Downloads simultâneos (Ctrl+J)" aria-keyshortcuts="Control+J"></select>
           </div>
 
           <!-- ════════════════ HISTÓRICO — persistente entre sessões ════════════════ -->
           <div id="historySection" class="overflow-hidden rounded-[1.25rem] border border-line bg-surface">
-            <button id="historyToggleBtn" class="group/hist flex h-[46px] w-full items-center justify-between bg-transparent px-[18px] text-fg-2 focus-visible:outline-offset-[-2px]" aria-expanded="false">
+            <button id="historyToggleBtn" class="group/hist flex h-[46px] w-full items-center justify-between bg-transparent px-[18px] text-fg-2 focus-visible:outline-offset-[-2px]" aria-expanded="false" title="Histórico (Ctrl+H)" aria-keyshortcuts="Control+H">
               <span class="text-[0.6875rem] font-bold tracking-[0.08em] text-fg-3 uppercase" role="heading" aria-level="2">Histórico</span>
               <svg class="text-fg-3 transition-transform duration-150 group-aria-expanded/hist:rotate-180" width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                 <path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>

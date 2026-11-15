@@ -108,8 +108,15 @@ pub fn update(app: &AppHandle) -> Result<String, String> {
 
     // Verifica que o binário executa antes de declarar sucesso — senão
     // remove para não deixar uma cópia quebrada com prioridade sobre a embutida.
-    let output = std::process::Command::new(&dest)
-        .arg("--version")
+    let mut version_check = std::process::Command::new(&dest);
+    version_check.arg("--version");
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x08000000;
+        version_check.creation_flags(CREATE_NO_WINDOW);
+    }
+    let output = version_check
         .output()
         .map_err(|e| format!("yt-dlp baixado não executou: {e}"))?;
     if !output.status.success() {

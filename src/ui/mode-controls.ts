@@ -27,7 +27,15 @@ function hasUnsavedAdvancedInput(): boolean {
       elements.subLangsInput?.value.trim() ||
       elements.extraArgsInput?.value.trim() ||
       elements.cookiesBrowserSelect?.value ||
-      elements.limitRateInput?.value.trim()
+      elements.limitRateInput?.value.trim() ||
+      elements.nameTemplateInput?.value.trim() ||
+      elements.embedThumbnailCheckbox?.checked ||
+      elements.embedChaptersCheckbox?.checked ||
+      elements.embedMetadataCheckbox?.checked ||
+      elements.sponsorblockSelect?.value ||
+      elements.proxyInput?.value.trim() ||
+      elements.scheduleInput?.value ||
+      elements.presetSelect?.value
   );
 }
 

@@ -61,6 +61,10 @@ export function openSelection(request: SelectionRequest) {
   elements.selectionPanel?.scrollIntoView({ block: "nearest" });
 }
 
+export function isSelectionOpen(): boolean {
+  return active !== null;
+}
+
 /** Enquanto os itens estão sendo enfileirados o painel não fecha: o envio não é abortável. */
 export function closeSelection() {
   if (confirming) return;

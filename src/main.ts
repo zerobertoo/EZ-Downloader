@@ -1,5 +1,6 @@
 import { bridge } from "./bridge";
 import { initMode, currentMode } from "./mode";
+import { initShortcuts } from "./shortcuts";
 import { initTheme } from "./theme";
 import { PATH_STORAGE_KEY, UI_STRINGS, elements, state } from "./state";
 import { renderPlaylistHint, toggle } from "./utils";
@@ -22,7 +23,7 @@ import { handleToggleMode, renderModeLabel, setQuickFormat } from "./ui/mode-con
 import { render } from "./ui/render";
 import { initConcurrencyUI } from "./ui/concurrency";
 import { initPresetsUI } from "./ui/presets";
-import { initSelectionUI } from "./ui/selection";
+import { closeSelection, initSelectionUI } from "./ui/selection";
 import { closeThemePopover, toggleThemePopover } from "./ui/theme-popover";
 
 initTheme();
@@ -50,6 +51,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   initDownloadsUI();
   initHistoryUI();
   initSelectionUI();
+  initShortcuts();
   document.addEventListener("click", (e) => {
     const popover = elements.themePopover;
     if (popover && !popover.classList.contains("hidden") && !popover.contains(e.target as Node) && e.target !== elements.themeToggleBtn) {
@@ -58,16 +60,18 @@ document.addEventListener("DOMContentLoaded", async () => {
   });
 
   document.addEventListener("keydown", (e) => {
-    if (e.key !== "Escape") return;
+    if (e.key !== "Escape" || e.isComposing) return;
     const popover = elements.themePopover;
     if (popover && !popover.classList.contains("hidden")) {
       closeThemePopover();
       elements.themeToggleBtn?.focus();
+    } else {
+      closeSelection();
     }
   });
 
   elements.urlInput?.addEventListener("keydown", (e) => {
-    if (e.key !== "Enter") return;
+    if (e.key !== "Enter" || e.ctrlKey || e.metaKey) return;
     if (currentMode() === "basic") {
       handleQuickDownload();
     } else {
