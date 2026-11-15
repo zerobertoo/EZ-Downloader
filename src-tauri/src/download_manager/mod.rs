@@ -1,4 +1,4 @@
-use crate::format_parser::{classify_ytdlp_error, parse_formats, FormatOption, YtdlpInfo};
+use crate::format_parser::{classify_ytdlp_error, parse_formats, YtdlpInfo};
 use crate::history::{HistoryEntry, HistoryStore};
 use crate::playlist::{parse_playlist, PlaylistResult};
 use crate::process_runner::{spawn_process, ProcessHandle, ProcessOutput};
@@ -6,7 +6,6 @@ pub use crate::queue::DownloadOptions;
 use crate::queue::{self, ItemStatus, QueueItem, QueueState};
 use crate::settings::{Preset, Settings, SettingsStore};
 use regex::Regex;
-use serde::Serialize;
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
@@ -15,53 +14,16 @@ use tauri::{AppHandle, Emitter};
 use tauri_plugin_notification::NotificationExt;
 use uuid::Uuid;
 
+mod events;
+
+pub use events::FormatsResult;
+use events::{DebugCommand, DebugLine, DownloadFinished, DownloadProgress};
+
 const PROGRESS_THROTTLE_MS: u128 = 500;
 const SCHEDULER_MAX_SLEEP_SECS: u64 = 30;
 const FORMATS_PROBE_TIMEOUT: Duration = Duration::from_secs(30);
 // Playlists grandes levam bem mais que um vídeo só pra listar.
 const PLAYLIST_PROBE_TIMEOUT: Duration = Duration::from_secs(120);
-
-#[derive(Debug, Serialize, Clone)]
-pub struct DownloadProgress {
-    pub id: String,
-    pub percent: f64,
-    pub speed: Option<String>,
-    pub eta: Option<String>,
-}
-
-#[derive(Debug, Serialize)]
-pub struct FormatsResult {
-    pub formats: Vec<FormatOption>,
-    pub title: Option<String>,
-    pub thumbnail: Option<String>,
-    pub uploader: Option<String>,
-}
-
-#[derive(Debug, Serialize, Clone)]
-pub struct DebugCommand {
-    pub id: String,
-    pub command: String,
-}
-
-#[derive(Debug, Serialize, Clone)]
-pub struct DebugLine {
-    pub id: String,
-    pub stream: &'static str,
-    pub text: String,
-}
-
-/// Resultado final de um download, emitido no evento "download-finished".
-#[derive(Debug, Serialize, Clone)]
-pub struct DownloadFinished {
-    pub id: String,
-    pub status: &'static str, // "done" | "failed" | "cancelled"
-    /// Pasta de destino (o que "Abrir pasta" abre).
-    pub path: Option<String>,
-    /// Arquivo final baixado (na playlist, o último) — base da conversão de codec.
-    #[serde(rename = "filePath")]
-    pub file_path: Option<String>,
-    pub error: Option<String>,
-}
 
 fn unix_now() -> i64 {
     std::time::SystemTime::now()
