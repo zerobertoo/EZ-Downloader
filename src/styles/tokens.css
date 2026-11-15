@@ -1,0 +1,81 @@
+@font-face {
+  font-family: "Archivo EZ";
+  font-style: normal;
+  font-weight: 100 900;
+  font-stretch: 62% 125%;
+  font-display: swap;
+  src: url("../assets/fonts/archivo-latin-wdth-normal.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+2074, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: "Archivo EZ";
+  font-style: normal;
+  font-weight: 100 900;
+  font-stretch: 62% 125%;
+  font-display: swap;
+  src: url("../assets/fonts/archivo-latin-ext-wdth-normal.woff2") format("woff2");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
+:root {
+  --accent: #f97316;
+  --accent-bright: #fb923c;
+  --bg: #0b0b0e;
+}
+
+:root[data-theme="azure"] { --accent: #38bdf8; --accent-bright: #7dd3fc; --bg: #090b0e; }
+:root[data-theme="verdant"] { --accent: #34d399; --accent-bright: #6ee7b7; --bg: #090c0b; }
+:root[data-theme="violet"] { --accent: #a78bfa; --accent-bright: #c4b5fd; --bg: #0b0a0f; }
+:root[data-theme="rose"] { --accent: #fb7185; --accent-bright: #fda4af; --bg: #0d0a0b; }
+
+:root {
+  color-scheme: dark;
+
+  --shell: color-mix(in srgb, var(--accent) 3%, #0f0f13);
+  --surface-1: color-mix(in srgb, var(--accent) 4%, #14141a);
+  --surface-2: color-mix(in srgb, var(--accent) 5%, #1b1b22);
+  --surface-3: color-mix(in srgb, var(--accent) 6%, #24242d);
+  --surface-4: color-mix(in srgb, var(--accent) 7%, #2e2e38);
+
+  --line: rgba(244, 239, 227, 0.07);
+  --line-2: rgba(244, 239, 227, 0.14);
+  --line-focus: color-mix(in srgb, var(--accent) 62%, transparent);
+
+  --accent-soft: color-mix(in srgb, var(--accent) 14%, transparent);
+  --accent-mid: color-mix(in srgb, var(--accent) 28%, transparent);
+  --on-accent: #140d08;
+
+  --paper: #f4efe3;
+  --paper-2: #e6dfcd;
+  --ink: #17130f;
+  --ink-2: #4a4338;
+
+  --text: #f1ede4;
+  --text-2: #bab6ab;
+  --text-3: #9a968c;
+
+  --green-deep: #166534;
+  --red-deep: #991b1b;
+  --green: #4ade80;
+  --green-soft: rgba(74, 222, 128, 0.14);
+  --red: #f87171;
+  --red-soft: rgba(248, 113, 113, 0.14);
+
+  --font-ui: "Archivo EZ", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --font-mono: ui-monospace, "Cascadia Code", "SF Mono", Consolas, monospace;
+
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 18px;
+  --radius-xl: 24px;
+
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --dur-fast: 140ms;
+  --dur-mid: 240ms;
+  --dur-slow: 420ms;
+
+  --shadow-card: 0 1px 0 rgba(244, 239, 227, 0.04) inset, 0 12px 32px rgba(0, 0, 0, 0.4);
+  --shadow-pop: 0 18px 44px rgba(0, 0, 0, 0.55), 0 2px 0 rgba(244, 239, 227, 0.05) inset;
+}
