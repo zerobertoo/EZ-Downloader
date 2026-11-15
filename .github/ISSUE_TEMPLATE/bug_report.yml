@@ -1,0 +1,85 @@
+name: Reportar um bug
+description: Algo não funcionou como esperado
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Obrigado por reportar! Quanto mais detalhes, mais rápido dá para corrigir.
+        Para vulnerabilidades de segurança, **não abra uma issue**: use o [relato privado](https://github.com/zerobertoo/EZ-Downloader/security/advisories/new).
+
+  - type: input
+    id: app-version
+    attributes:
+      label: Versão do EZ Downloader
+      description: Aparece em Ajustes.
+      placeholder: "2.5.0"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: operating-system
+    attributes:
+      label: Sistema operacional
+      options:
+        - Windows
+        - macOS (Apple Silicon)
+        - macOS (Intel)
+        - Linux
+    validations:
+      required: true
+
+  - type: input
+    id: link
+    attributes:
+      label: Link ou site do vídeo
+      description: "O endereço que você tentou baixar. Se for conteúdo privado, diga só o site (ex.: YouTube, Instagram)."
+    validations:
+      required: true
+
+  - type: dropdown
+    id: mode
+    attributes:
+      label: Modo em que aconteceu
+      options:
+        - Básico
+        - Avançado
+        - Não sei
+    validations:
+      required: true
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: O que aconteceu
+      description: O que você esperava e o que aconteceu de fato. Se houve mensagem de erro, copie o texto.
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Como reproduzir
+      placeholder: |
+        1. Colei o link...
+        2. Cliquei em...
+        3. ...
+    validations:
+      required: false
+
+  - type: textarea
+    id: technical-log
+    attributes:
+      label: Detalhes técnicos
+      description: Abra o card do download e expanda **Detalhes técnicos**. Cole aqui o comando e as linhas do log. Revise antes de colar, o log pode conter o link e o nome da pasta.
+      render: text
+    validations:
+      required: false
+
+  - type: input
+    id: cookies-browser
+    attributes:
+      label: Navegador usado em "Entrar com o navegador"
+      description: Se você configurou isso em Ajustes. Deixe em branco se não usa.
+    validations:
+      required: false

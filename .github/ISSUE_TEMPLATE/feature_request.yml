@@ -1,0 +1,37 @@
+name: Sugerir uma funcionalidade
+description: Uma ideia para melhorar o EZ Downloader
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Qual problema isso resolve?
+      description: Conte a situação em que você sentiu falta disso.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Como você imagina que funcionaria
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternativas que você já tentou
+    validations:
+      required: false
+
+  - type: dropdown
+    id: mode
+    attributes:
+      label: Onde isso aparece
+      options:
+        - Modo Básico
+        - Modo Avançado
+        - Os dois
+        - Não sei
+    validations:
+      required: false
