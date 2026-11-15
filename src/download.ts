@@ -170,7 +170,10 @@ export async function handleQuickDownload() {
     refs.urlInput.focus();
     return;
   }
-  const { urls, invalid } = parseUrlList(raw);
+  const parsed = parseUrlList(raw);
+  const { invalid } = parsed;
+  // Um vídeo aberto dentro de uma playlist baixa só o vídeo: quem quer a lista inteira cola o link da playlist.
+  const urls = parsed.urls.map((candidate) => singleVideoUrlOf(candidate) ?? candidate);
   if (invalid.length > 0) {
     refs.message.error(urls.length + invalid.length > 1 ? UI_STRINGS.errorInvalidUrlInList : UI_STRINGS.errorInvalidUrl);
     return;
@@ -203,7 +206,10 @@ export async function handleQuickDownload() {
       return;
     }
     const entries = await withDuplicateFlags(urls.map((url) => ({ url, title: null, durationSeconds: null })));
-    if (entries.some((entry) => entry.duplicate)) {
+    if (entries.length === 1 && entries[0].duplicate) {
+      const again = await confirmDialog({ title: UI_STRINGS.duplicateSingleTitle, body: UI_STRINGS.duplicateSingleBody, confirmLabel: UI_STRINGS.duplicateSingleConfirm });
+      if (!again) return;
+    } else if (entries.some((entry) => entry.duplicate)) {
       openSelection({ heading: UI_STRINGS.duplicateHeading, entries, buildParams, onEnqueued: keepFailedUrls });
       return;
     }
